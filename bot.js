@@ -4210,24 +4210,26 @@ console.log(`💰 Банк: ${safeNumber(bank.pot)}, Джекпот: ${safeNumbe
 // ==================== РЕЖИМ РАБОТЫ ПО РАСПИСАНИЮ ====================
 function checkWorkHours() {
   const now = new Date();
-  const hours = now.getHours();
-  const minutes = now.getMinutes();
+  // Используем UTC время, чтобы не зависеть от сервера
+  const hours = now.getUTCHours();
+  const minutes = now.getUTCMinutes();
   const currentTime = hours * 60 + minutes;
 
-  console.log(`🕒 Текущее время на сервере: ${hours}:${minutes}`);
-  
-  const WORK_START = 7 * 60;
-  const WORK_END = 23 * 60;
+  // Ваше время в UTC (Москва UTC+3)
+  // 7:00 по вашему = 4:00 UTC
+  // 23:00 по вашему = 20:00 UTC
+  const WORK_START = 4 * 60;   // 4:00 UTC = 7:00 по вашему
+  const WORK_END = 20 * 60;    // 20:00 UTC = 23:00 по вашему
 
   if (currentTime < WORK_START || currentTime >= WORK_END) {
     if (bot.isPolling) {
       bot.stopPolling();
-      console.log(`⏰ Бот остановлен (${hours}:${minutes}). Жду утра...`);
+      console.log(`⏰ Бот остановлен (${hours}:${minutes} UTC). Жду утра...`);
     }
   } else {
     if (!bot.isPolling) {
       bot.startPolling();
-      console.log(`⏰ Бот запущен (${hours}:${minutes})`);
+      console.log(`⏰ Бот запущен (${hours}:${minutes} UTC)`);
     }
   }
 }
