@@ -4214,6 +4214,8 @@ function checkWorkHours() {
   const minutes = now.getMinutes();
   const currentTime = hours * 60 + minutes;
 
+  console.log(`🕒 Текущее время на сервере: ${hours}:${minutes}`);
+  
   const WORK_START = 7 * 60;
   const WORK_END = 23 * 60;
 
