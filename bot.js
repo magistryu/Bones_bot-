@@ -4210,4 +4210,32 @@ process.on('uncaughtException', (err) => {
 console.log('🏴‍☠️ ЧЁРНАЯ КОСТЬ v10.7 (ИСПРАВЛЕННАЯ) ЗАПУЩЕНА');
 console.log(`👥 Игроков: ${Object.keys(players).length}`);
 console.log(`💰 Банк: ${safeNumber(bank.pot)}, Джекпот: ${safeNumber(bank.jackpot)}`);
+// ==================== РЕЖИМ РАБОТЫ ПО РАСПИСАНИЮ ====================
+function checkWorkHours() {
+  const now = new Date();
+  const hours = now.getHours();
+  const minutes = now.getMinutes();
+  const currentTime = hours * 60 + minutes;
+
+  const WORK_START = 7 * 60;
+  const WORK_END = 23 * 60;
+
+  if (currentTime < WORK_START || currentTime >= WORK_END) {
+    if (bot.isPolling) {
+      bot.stopPolling();
+      console.log(`⏰ Бот остановлен (${hours}:${minutes}). Жду утра...`);
+    }
+  } else {
+    if (!bot.isPolling) {
+      bot.startPolling();
+      console.log(`⏰ Бот запущен (${hours}:${minutes})`);
+    }
+  }
+}
+
+checkWorkHours();
+
+setInterval(() => {
+  checkWorkHours();
+}, 300000);
 saveData();
