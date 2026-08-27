@@ -6,7 +6,7 @@ const crypto = require('crypto');
 const token = process.env.BOT_TOKEN;
 const ADMIN_ID = parseInt(process.env.ADMIN_ID);
 
-const bot = new TelegramBot(token, {
+const bot = new TelegramBot(token, { 
   polling: {
     interval: 300,
     autoStart: true,
@@ -17,15 +17,13 @@ const bot = new TelegramBot(token, {
 });
 
 bot.on('polling_error', (err) => {
-  console.log('⚠ Ошибка polling:', err.message);
-
+  console.log('⚠️ Ошибка polling:', err.message);
   if (err.message.includes('ECONNRESET') || err.message.includes('ETIMEDOUT')) {
     console.log('🔄 Переподключение через 30 секунд...');
     setTimeout(() => {
       bot.startPolling();
     }, 30000);
   }
-
   if (err.message.includes('409 Conflict')) {
     console.log('🔄 Конфликт 409, перезапуск бота через 10 секунд...');
     setTimeout(() => {
@@ -74,23 +72,24 @@ const ACHIEVEMENTS = [
   { id: 3, name: '🔥 Серия 10', desc: 'Выиграть 10 игр подряд', cost: 2000, bonus: 5 },
   { id: 4, name: '👑 Победитель', desc: 'Выиграть 100 игр', cost: 5000, bonus: 10 },
   { id: 5, name: '💰 Миллионер', desc: 'Накопить 1 000 000 дуб.', cost: 10000, bonus: 20 },
-  { id: 6, name: '⚔ Дуэлянт', desc: 'Выиграть 50 дуэлей', cost: 3000, bonus: 8 },
-  { id: 7, name: '🏴☠ Пират', desc: 'Купить 10 кораблей', cost: 5000, bonus: 10 },
+  { id: 6, name: '⚔️ Дуэлянт', desc: 'Выиграть 50 дуэлей', cost: 3000, bonus: 8 },
+  { id: 7, name: '🏴‍☠️ Пират', desc: 'Купить 10 кораблей', cost: 5000, bonus: 10 },
   { id: 8, name: '🌊 Легенда', desc: 'Открыть 100 сундуков', cost: 15000, bonus: 25 },
-  { id: 9, name: '🎴 Картёжник', desc: 'Выиграть 50 игр в блэкджек', cost: 8000, bonus: 15 },                                        { id: 10, name: '👑 Император', desc: 'Получить все достижения', cost: 50000, bonus: 50 },
+  { id: 9, name: '🎴 Картёжник', desc: 'Выиграть 50 игр в блэкджек', cost: 8000, bonus: 15 },
+  { id: 10, name: '👑 Император', desc: 'Получить все достижения', cost: 50000, bonus: 50 },
 ];
 
 const SUNDUK_LEVELS = [
   { id: 1, name: '🟢 Низкий', risk: 10, minCost: 50, maxCost: 200, winChance: 70, minWin: 1.5, maxWin: 3, consolation: 50 },
   { id: 2, name: '🟡 Средний', risk: 30, minCost: 200, maxCost: 1000, winChance: 50, minWin: 2, maxWin: 5, consolation: 30 },
   { id: 3, name: '🔴 Высокий', risk: 60, minCost: 1000, maxCost: 5000, winChance: 30, minWin: 3, maxWin: 8, consolation: 20 },
-  { id: 4, name: '⚫ Экстремальный', risk: 90, minCost: 5000, maxCost: 25000, winChance: 10, minWin: 5, maxWin: 20, consolation: 10
- }
+  { id: 4, name: '⚫ Экстремальный', risk: 90, minCost: 5000, maxCost: 25000, winChance: 10, minWin: 5, maxWin: 20, consolation: 10 }
 ];
 
 let sundukStats = {};
 let freeSundukUsed = {};
 
+// ==================== ИНВЕСТИЦИИ ====================
 const INVESTMENT_CONFIG = {
   minAmount: 100,
   maxAmount: 100000,
@@ -158,10 +157,181 @@ function endTournament() {
     const balB = players[b]?.demoMode ? safeNumber(players[b].demoBalance) : safeNumber(players[b]?.balance) || 0;
     return balB - balA;
   });
-  tournaments.results = tournaments.players;                                                                                         if (tournaments.players.length > 0) {
+  tournaments.results = tournaments.players;
+  if (tournaments.players.length > 0) {
     tournaments.winnerId = tournaments.players[0];
   }
   tournaments.prizePool = tournaments.players.length * TOURNAMENT_CONFIG.entryFee;
+}
+
+// ==================== ФУНКЦИИ БЛЭКДЖЕКА ====================
+function createDeck() {
+  const suits = ['♠️', '♥️', '♦️', '♣️'];
+  const ranks = ['2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K', 'A'];
+  const deck = [];
+  for (let suit of suits) {
+    for (let rank of ranks) {
+      deck.push({ suit, rank });
+    }
+  }
+  return deck;
+}
+
+function shuffleDeck(deck) {
+  for (let i = deck.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [deck[i], deck[j]] = [deck[j], deck[i]];
+  }
+  return deck;
+}
+
+function getCardValue(rank) {
+  if (rank === 'A') return 11;
+  if (['J', 'Q', 'K'].includes(rank)) return 10;
+  return parseInt(rank);
+}
+
+function getHandValue(hand) {
+  let value = 0;
+  let aces = 0;
+  for (let card of hand) {
+    if (card.rank === 'A') aces++;
+    value += getCardValue(card.rank);
+  }
+  while (value > 21 && aces > 0) {
+    value -= 10;
+    aces--;
+  }
+  return value;
+}
+
+function formatHand(hand) {
+  return hand.map(c => `${c.suit}${c.rank}`).join(' ');
+}
+
+function isBlackjack(hand) {
+  return hand.length === 2 && getHandValue(hand) === 21;
+}
+
+function initBlackjackGame(playerId) {
+  const deck = shuffleDeck(createDeck());
+  blackjackGames[playerId] = {
+    deck: deck,
+    playerHand: [],
+    dealerHand: [],
+    bet: 0,
+    status: 'waiting',
+    splitHands: [],
+    currentSplit: 0
+  };
+  return blackjackGames[playerId];
+}
+
+function finishBlackjack(playerId) {
+  const game = blackjackGames[playerId];
+  if (!game) return;
+  const p = players[playerId];
+  if (!p) return;
+
+  let winAmount = 0;
+  let result = '';
+
+  if (game.splitHands && game.splitHands.length > 0) {
+    let totalWin = 0;
+    let dealerValue = getHandValue(game.dealerHand);
+    let dealerHand = game.dealerHand;
+    let safetyCounter = 0;
+    while (dealerValue < 17 && safetyCounter < 10) {
+      const card = game.deck.pop();
+      if (!card) break;
+      dealerHand.push(card);
+      dealerValue = getHandValue(dealerHand);
+      safetyCounter++;
+    }
+    game.dealerHand = dealerHand;
+    
+    for (let hand of game.splitHands) {
+      const value = getHandValue(hand);
+      if (value > 21) {
+        totalWin -= game.bet;
+      } else if (dealerValue > 21 || value > dealerValue) {
+        totalWin += game.bet * 2;
+      } else if (value === dealerValue) {
+        totalWin += game.bet;
+      } else {
+        totalWin -= game.bet;
+      }
+    }
+    winAmount = totalWin;
+    if (winAmount > 0) {
+      if (p.demoMode) {
+        p.demoBalance = safeNumber(p.demoBalance) + winAmount;
+      } else {
+        p.balance = safeNumber(p.balance) + winAmount;
+      }
+    }
+    const balance = p.demoMode ? safeNumber(p.demoBalance) : safeNumber(p.balance);
+    bot.sendMessage(playerId,
+      `🎴 РЕЗУЛЬТАТЫ СПЛИТА:\n\n` +
+      `Рука 1: ${formatHand(game.splitHands[0])} (${getHandValue(game.splitHands[0])} очков)\n` +
+      `Рука 2: ${formatHand(game.splitHands[1])} (${getHandValue(game.splitHands[1])} очков)\n` +
+      `Дилер: ${formatHand(game.dealerHand)} (${getHandValue(game.dealerHand)} очков)\n\n` +
+      `💰 Итог: ${winAmount > 0 ? '+' : ''}${winAmount} дуб.\n` +
+      `📊 Баланс: ${balance} дуб.`,
+      mainInlineKeyboard()
+    );
+    delete blackjackGames[playerId];
+    return;
+  }
+
+  const playerHand = game.playerHand;
+  const dealerHand = game.dealerHand;
+  const playerValue = getHandValue(playerHand);
+  let dealerValue = getHandValue(dealerHand);
+
+  let safetyCounter = 0;
+  while (dealerValue < 17 && safetyCounter < 10) {
+    const card = game.deck.pop();
+    if (!card) break;
+    dealerHand.push(card);
+    dealerValue = getHandValue(dealerHand);
+    safetyCounter++;
+  }
+
+  if (playerValue > 21) {
+    result = '❌ Перебор! Ты проиграл!';
+    winAmount = -game.bet;
+  } else if (dealerValue > 21 || playerValue > dealerValue) {
+    result = '✅ Ты выиграл!';
+    winAmount = game.bet * 2;
+    if (isBlackjack(playerHand)) winAmount = Math.floor(game.bet * 2.5);
+  } else if (playerValue === dealerValue) {
+    result = '🤝 Ничья!';
+    winAmount = game.bet;
+  } else {
+    result = '❌ Ты проиграл!';
+    winAmount = -game.bet;
+  }
+
+  if (winAmount > 0) {
+    if (p.demoMode) {
+      p.demoBalance = safeNumber(p.demoBalance) + winAmount;
+    } else {
+      p.balance = safeNumber(p.balance) + winAmount;
+    }
+  }
+
+  const balance = p.demoMode ? safeNumber(p.demoBalance) : safeNumber(p.balance);
+  bot.sendMessage(playerId,
+    `🎴 РЕЗУЛЬТАТ:\n\n` +
+    `Твоя рука: ${formatHand(playerHand)} (${playerValue} очков)\n` +
+    `Дилер: ${formatHand(dealerHand)} (${dealerValue} очков)\n\n` +
+    `${result}\n` +
+    `💰 ${winAmount > 0 ? '+' : ''}${winAmount} дуб.\n` +
+    `📊 Баланс: ${balance} дуб.`,
+    mainInlineKeyboard()
+  );
+  delete blackjackGames[playerId];
 }
 
 // ==================== ПИРАТСКИЙ ФЛОТ ====================
@@ -169,18 +339,19 @@ const SHIPS = [
   { id: 1, name: '🚤 Шлюпка', cost: 5000, income: 5, upgradeCost: 3000, level: 0, maxLevel: 10 },
   { id: 2, name: '⛵ Бригантина', cost: 15000, income: 15, upgradeCost: 8000, level: 0, maxLevel: 10 },
   { id: 3, name: '⚓ Фрегат', cost: 30000, income: 30, upgradeCost: 15000, level: 0, maxLevel: 10 },
-  { id: 4, name: '🏴☠ Галеон', cost: 50000, income: 50, upgradeCost: 25000, level: 0, maxLevel: 10 },
+  { id: 4, name: '🏴‍☠️ Галеон', cost: 50000, income: 50, upgradeCost: 25000, level: 0, maxLevel: 10 },
   { id: 5, name: '👑 Линейный корабль', cost: 80000, income: 80, upgradeCost: 40000, level: 0, maxLevel: 10 },
-  { id: 6, name: '⚔ Дредноут', cost: 120000, income: 120, upgradeCost: 60000, level: 0, maxLevel: 10 },
-  { id: 7, name: '🌊 Мана-о-вар', cost: 180000, income: 180, upgradeCost: 90000, level: 0, maxLevel: 10 },                           { id: 8, name: '💀 Летучий голландец', cost: 250000, income: 250, upgradeCost: 120000, level: 0, maxLevel: 10 },
+  { id: 6, name: '⚔️ Дредноут', cost: 120000, income: 120, upgradeCost: 60000, level: 0, maxLevel: 10 },
+  { id: 7, name: '🌊 Мана-о-вар', cost: 180000, income: 180, upgradeCost: 90000, level: 0, maxLevel: 10 },
+  { id: 8, name: '💀 Летучий голландец', cost: 250000, income: 250, upgradeCost: 120000, level: 0, maxLevel: 10 },
   { id: 9, name: '🔥 Флагман', cost: 350000, income: 350, upgradeCost: 180000, level: 0, maxLevel: 10 },
   { id: 10, name: '👑 Королевский якорь', cost: 500000, income: 500, upgradeCost: 250000, level: 0, maxLevel: 10 },
   { id: 11, name: '🦈 Акула', cost: 700000, income: 700, upgradeCost: 350000, level: 0, maxLevel: 10 },
   { id: 12, name: '🐉 Дракон', cost: 1000000, income: 1000, upgradeCost: 500000, level: 0, maxLevel: 10 },
   { id: 13, name: '⚡ Молния', cost: 1500000, income: 1500, upgradeCost: 750000, level: 0, maxLevel: 10 },
-  { id: 14, name: '🌪 Ураган', cost: 2000000, income: 2000, upgradeCost: 1000000, level: 0, maxLevel: 10 },
+  { id: 14, name: '🌪️ Ураган', cost: 2000000, income: 2000, upgradeCost: 1000000, level: 0, maxLevel: 10 },
   { id: 15, name: '🌌 Звёздный странник', cost: 3000000, income: 3000, upgradeCost: 1500000, level: 0, maxLevel: 10 },
-  { id: 16, name: '♾ Бесконечность', cost: 5000000, income: 5000, upgradeCost: 2500000, level: 0, maxLevel: 10 },
+  { id: 16, name: '♾️ Бесконечность', cost: 5000000, income: 5000, upgradeCost: 2500000, level: 0, maxLevel: 10 },
   { id: 17, name: '🔥 Феникс', cost: 8000000, income: 8000, upgradeCost: 4000000, level: 0, maxLevel: 10 },
   { id: 18, name: '💎 Алмазный дракон', cost: 12000000, income: 12000, upgradeCost: 6000000, level: 0, maxLevel: 10 },
   { id: 19, name: '👾 Космический пират', cost: 20000000, income: 20000, upgradeCost: 10000000, level: 0, maxLevel: 10 },
@@ -270,7 +441,8 @@ function checkAchievements(p, id) {
 
   for (let ach of ACHIEVEMENTS) {
     if (unlocked.includes(ach.id)) continue;
-    let condition = false;                                                                                                         
+    let condition = false;
+
     switch (ach.id) {
       case 1: condition = p.stats.totalGames >= 1; break;
       case 2: condition = p.stats.maxStreak >= 5; break;
@@ -307,7 +479,7 @@ function checkAchievements(p, id) {
 const EVENTS = [
   { name: '🦜 Пиратский налёт', desc: 'Удвоение банка на 10 минут!', multiplier: 2, duration: 600000 },
   { name: '💰 Золотая лихорадка', desc: '+50% к выигрышу на 1 час!', multiplier: 1.5, duration: 3600000 },
-  { name: '🏴☠ Чёрная метка', desc: 'Джекпот увеличивается в 3 раза!', multiplier: 3, duration: 1800000 },
+  { name: '🏴‍☠️ Чёрная метка', desc: 'Джекпот увеличивается в 3 раза!', multiplier: 3, duration: 1800000 },
 ];
 
 let activeEvent = null;
@@ -326,181 +498,12 @@ let duelChallenges = {};
 let saveTimeout = null;
 let blackjackGames = {};
 
-// ==================== ФУНКЦИИ БЛЭКДЖЕКА ====================                                                                     function createDeck() {
-  const suits = ['♠', '♥', '♦', '♣'];
-  const ranks = ['2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K', 'A'];
-  const deck = [];
-  for (let suit of suits) {
-    for (let rank of ranks) {
-      deck.push({ suit, rank });
-    }
-  }
-  return deck;
-}
-
-function shuffleDeck(deck) {
-  for (let i = deck.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [deck[i], deck[j]] = [deck[j], deck[i]];
-  }
-  return deck;
-}
-
-function getCardValue(rank) {
-  if (rank === 'A') return 11;
-  if (['J', 'Q', 'K'].includes(rank)) return 10;
-  return parseInt(rank);
-}
-
-function getHandValue(hand) {
-  let value = 0;
-  let aces = 0;
-  for (let card of hand) {
-    if (card.rank === 'A') aces++;
-    value += getCardValue(card.rank);
-  }
-  while (value > 21 && aces > 0) {
-    value -= 10;
-    aces--;
-  }
-  return value;
-}
-
-function formatHand(hand) {
-  return hand.map(c => `${c.suit}${c.rank}`).join(' ');
-}
-
-function isBlackjack(hand) {
-  return hand.length === 2 && getHandValue(hand) === 21;
-}
-
-function initBlackjackGame(playerId) {
-  const deck = shuffleDeck(createDeck());
-  blackjackGames[playerId] = {
-    deck: deck,
-    playerHand: [],
-    dealerHand: [],
-    bet: 0,
-    status: 'waiting',
-    splitHands: [],                                                                                                                    currentSplit: 0
-  };
-  return blackjackGames[playerId];
-}
-
-function finishBlackjack(playerId) {
-  const game = blackjackGames[playerId];
-  if (!game) return;
-  const p = players[playerId];
-  if (!p) return;
-
-  let winAmount = 0;
-  let result = '';
-
-  // ===== ОБРАБОТКА СПЛИТА =====
-  if (game.splitHands && game.splitHands.length > 0) {
-    let totalWin = 0;
-    let dealerValue = getHandValue(game.dealerHand);
-    let dealerHand = game.dealerHand;
-    let safetyCounter = 0;
-    while (dealerValue < 17 && safetyCounter < 10) {
-      const card = game.deck.pop();
-      if (!card) break;
-      dealerHand.push(card);
-      dealerValue = getHandValue(dealerHand);
-      safetyCounter++;
-    }
-    game.dealerHand = dealerHand;
-
-    for (let hand of game.splitHands) {
-      const value = getHandValue(hand);
-      if (value > 21) {
-        totalWin -= game.bet;
-      } else if (dealerValue > 21 || value > dealerValue) {
-        totalWin += game.bet * 2;
-      } else if (value === dealerValue) {
-        totalWin += game.bet;
-      } else {
-        totalWin -= game.bet;
-      }
-    }
-    winAmount = totalWin;
-    if (winAmount > 0) {
-      if (p.demoMode) {
-        p.demoBalance = safeNumber(p.demoBalance) + winAmount;
-      } else {
-        p.balance = safeNumber(p.balance) + winAmount;
-      }
-    }
-    const balance = p.demoMode ? safeNumber(p.demoBalance) : safeNumber(p.balance);
-    bot.sendMessage(playerId,
-      `🎴 РЕЗУЛЬТАТЫ СПЛИТА:\n\n` +
-      `Рука 1: ${formatHand(game.splitHands[0])} (${getHandValue(game.splitHands[0])} очков)\n` +
-      `Рука 2: ${formatHand(game.splitHands[1])} (${getHandValue(game.splitHands[1])} очков)\n` +
-      `Дилер: ${formatHand(game.dealerHand)} (${getHandValue(game.dealerHand)} очков)\n\n` +
-      `💰 Итог: ${winAmount > 0 ? '+' : ''}${winAmount} дуб.\n` +
-      `📊 Баланс: ${balance} дуб.`,
-      mainInlineKeyboard()
-    );
-    delete blackjackGames[playerId];
-    return;
-  }
-
-  // ===== ОБЫЧНАЯ ИГРА =====
-  const playerHand = game.playerHand;
-  const dealerHand = game.dealerHand;
-  const playerValue = getHandValue(playerHand);
-  let dealerValue = getHandValue(dealerHand);
-
-  let safetyCounter = 0;
-  while (dealerValue < 17 && safetyCounter < 10) {
-    const card = game.deck.pop();
-    if (!card) break;
-    dealerHand.push(card);
-    dealerValue = getHandValue(dealerHand);
-    safetyCounter++;
-  }
-  
-  if (playerValue > 21) {
-    result = '❌ Перебор! Ты проиграл!';
-    winAmount = -game.bet;
-  } else if (dealerValue > 21 || playerValue > dealerValue) {
-    result = '✅ Ты выиграл!';
-    winAmount = game.bet * 2;
-    if (isBlackjack(playerHand)) winAmount = Math.floor(game.bet * 2.5);
-  } else if (playerValue === dealerValue) {
-    result = '🤝 Ничья!';
-    winAmount = game.bet;
-  } else {
-    result = '❌ Ты проиграл!';
-    winAmount = -game.bet;
-  }
-
-  if (winAmount > 0) {
-    if (p.demoMode) {
-      p.demoBalance = safeNumber(p.demoBalance) + winAmount;
-    } else {
-      p.balance = safeNumber(p.balance) + winAmount;
-    }
-  }
-
-  const balance = p.demoMode ? safeNumber(p.demoBalance) : safeNumber(p.balance);
-  bot.sendMessage(playerId,
-    `🎴 РЕЗУЛЬТАТ:\n\n` +
-    `Твоя рука: ${formatHand(playerHand)} (${playerValue} очков)\n` +
-    `Дилер: ${formatHand(dealerHand)} (${dealerValue} очков)\n\n` +
-    `${result}\n` +
-    `💰 ${winAmount > 0 ? '+' : ''}${winAmount} дуб.\n` +
-    `📊 Баланс: ${balance} дуб.`,
-    mainInlineKeyboard()
-  );
-  delete blackjackGames[playerId];
-}
-                                                                                                                                   const RANKS = [
+const RANKS = [
   { name: 'Боцман', costDublons: 0, costRub: 0, bonus: 0, passive: 0, emoji: '🪵' },
   { name: 'Шкипер', costDublons: 2000, costRub: 0, bonus: 20, passive: 5, emoji: '⚓' },
   { name: 'Капитан', costDublons: 5000, costRub: 0, bonus: 40, passive: 15, emoji: '🏴' },
-  { name: 'Командор', costDublons: 10000, costRub: 0, bonus: 60, passive: 30, emoji: '⚔' },
-  { name: 'Адмирал', costDublons: 20000, costRub: 0, bonus: 80, passive: 50, emoji: '🎖' },
+  { name: 'Командор', costDublons: 10000, costRub: 0, bonus: 60, passive: 30, emoji: '⚔️' },
+  { name: 'Адмирал', costDublons: 20000, costRub: 0, bonus: 80, passive: 50, emoji: '🎖️' },
   { name: 'Король пиратов', costDublons: 40000, costRub: 0, bonus: 120, passive: 80, emoji: '👑' },
   { name: 'Легенда морей', costDublons: 70000, costRub: 0, bonus: 150, passive: 120, emoji: '🌊' },
   { name: 'Властелин океана', costDublons: 100000, costRub: 0, bonus: 200, passive: 200, emoji: '🔱' }
@@ -522,7 +525,7 @@ function loadData() {
     if (fs.existsSync(HASH_FILE)) {
       const currentHash = crypto.createHash('sha256').update(JSON.stringify(players)).digest('hex');
       const savedHash = fs.readFileSync(HASH_FILE, 'utf8');
-      if (currentHash !== savedHash) console.log('⚠ ВНИМАНИЕ! Файл players.json был изменён извне!');
+      if (currentHash !== savedHash) console.log('⚠️ ВНИМАНИЕ! Файл players.json был изменён извне!');
     }
   } catch (e) {
     players = {};
@@ -551,7 +554,8 @@ function saveData() {
       console.error('❌ Ошибка сохранения:', e.message);
       saveTimeout = null;
     }
-  }, 2000);                                                                                                                        }
+  }, 2000);
+}
 
 loadData();
 
@@ -630,14 +634,15 @@ function getPlayer(id) {
       sundukBestWin: 0,
       sundukStreak: 0,
       blackjackWins: 0,
+      lastActivity: Date.now(),
       stats: { wins: 0, losses: 0, points: 0, streak: 0, maxStreak: 0, totalGames: 0 },
       duelStats: { wins: 0, losses: 0, totalGames: 0 },
       vipStats: { wins: 0, losses: 0, totalGames: 0 },
       fleet: { ships: [], totalIncome: 0, lastCollected: Date.now() }
     };
-  }
+          }
 
-  if (!players[id].demoDate) players[id].demoDate = new Date().toDateString();
+if (!players[id].demoDate) players[id].demoDate = new Date().toDateString();
   if (players[id].demoBalance === undefined) players[id].demoBalance = 50;
   if (players[id].demoMode === undefined) players[id].demoMode = false;
   if (players[id].demoBet === undefined) players[id].demoBet = 0;
@@ -646,6 +651,7 @@ function getPlayer(id) {
   if (players[id].demoHasRolled === undefined) players[id].demoHasRolled = false;
   if (players[id].demoRollsToday === undefined) players[id].demoRollsToday = 0;
   if (!players[id].fleet) players[id].fleet = { ships: [], totalIncome: 0, lastCollected: Date.now() };
+  if (!players[id].lastActivity) players[id].lastActivity = Date.now();
 
   if (!players[id].stats) players[id].stats = { wins: 0, losses: 0, points: 0, streak: 0, maxStreak: 0, totalGames: 0 };
   if (!players[id].duelStats) players[id].duelStats = { wins: 0, losses: 0, totalGames: 0 };
@@ -664,7 +670,8 @@ function getPlayer(id) {
   if (!players[id].giftHistory) players[id].giftHistory = [];
   if (!players[id].investments) players[id].investments = [];
   if (players[id].limitUpgrades === undefined) players[id].limitUpgrades = 0;
-  if (!players[id].achievements) players[id].achievements = [];                                                                      if (players[id].achievementBonus === undefined) players[id].achievementBonus = 0;
+  if (!players[id].achievements) players[id].achievements = [];
+  if (players[id].achievementBonus === undefined) players[id].achievementBonus = 0;
   if (players[id].sundukOpened === undefined) players[id].sundukOpened = 0;
   if (players[id].sundukWins === undefined) players[id].sundukWins = 0;
   if (players[id].sundukBestWin === undefined) players[id].sundukBestWin = 0;
@@ -731,7 +738,7 @@ function isFlood(id) {
     return true;
   }
   if (rateLimit[id] && now - rateLimit[id] < 2000) {
-    console.log(`⚠ Флуд от ${id} (${players[id]?.username || 'unknown'})`);
+    console.log(`⚠️ Флуд от ${id} (${players[id]?.username || 'unknown'})`);
     return true;
   }
   rateLimit[id] = now;
@@ -745,7 +752,8 @@ function blockUser(id) {
 
 function sleep(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
 
-function checkBalance(p, amount) {                                                                                                   const bal = p.demoMode ? safeNumber(p.demoBalance) : safeNumber(p.balance);
+function checkBalance(p, amount) {
+  const bal = p.demoMode ? safeNumber(p.demoBalance) : safeNumber(p.balance);
   const amt = Number(amount) || 0;
   if (bal < amt) {
     return { ok: false, message: `❌ Не хватает. У тебя ${bal} дуб.` };
@@ -812,7 +820,7 @@ function disableMaintenance() {
     if (players[id].balance > 0 || players[id].demoBalance > 0) {
       bot.sendMessage(id,
         `✅ ТЕХНИЧЕСКИЕ РАБОТЫ ЗАВЕРШЕНЫ!\n\n` +
-        `Бот снова в строю! 🏴☠\n` +
+        `Бот снова в строю! 🏴‍☠️\n` +
         `Приятной игры! 🎲`
       ).catch(() => {});
     }
@@ -837,8 +845,8 @@ function blackjackKeyboard() {
     reply_markup: {
       inline_keyboard: [
         [{ text: '🎴 Взять карту', callback_data: 'bj_hit' }, { text: '✋ Остановиться', callback_data: 'bj_stand' }],
-        [{ text: '⚡ Удвоить', callback_data: 'bj_double' }, { text: '✂ Сплит', callback_data: 'bj_split' }],
-        [{ text: '⬅ Выйти', callback_data: 'bj_quit' }]
+        [{ text: '⚡ Удвоить', callback_data: 'bj_double' }, { text: '✂️ Сплит', callback_data: 'bj_split' }],
+        [{ text: '⬅️ Выйти', callback_data: 'bj_quit' }]
       ]
     }
   };
@@ -850,10 +858,10 @@ function fleetKeyboard() {
       inline_keyboard: [
         [{ text: '📋 Мои корабли', callback_data: 'fleet_my' }],
         [{ text: '🛒 Купить корабль', callback_data: 'fleet_buy' }],
-        [{ text: '⬆ Улучшить корабль', callback_data: 'fleet_upgrade' }],
+        [{ text: '⬆️ Улучшить корабль', callback_data: 'fleet_upgrade' }],
         [{ text: '💰 Собрать доход', callback_data: 'fleet_collect' }],
         [{ text: '🏆 Топ флотов', callback_data: 'fleet_top' }],
-        [{ text: '⬅ Назад', callback_data: 'menu_back' }]
+        [{ text: '⬅️ Назад', callback_data: 'menu_back' }]
       ]
     }
   };
@@ -865,9 +873,11 @@ function tournamentKeyboard() {
       inline_keyboard: [
         [{ text: '📋 Инфо о турнире', callback_data: 'tournament_info' }],
         [{ text: '💰 Участвовать', callback_data: 'tournament_join' }],
-        [{ text: '🏆 Таблица лидеров', callback_data: 'tournament_leaderboard' }],                                                         [{ text: '⬅ Назад', callback_data: 'menu_back' }]
+        [{ text: '🏆 Таблица лидеров', callback_data: 'tournament_leaderboard' }],
+        [{ text: '⬅️ Назад', callback_data: 'menu_back' }]
       ]
-    }                                                                                                                                };
+    }
+  };
 }
 
 function mainInlineKeyboard() {
@@ -876,14 +886,16 @@ function mainInlineKeyboard() {
       inline_keyboard: [
         [{ text: '🎰 Играть', callback_data: 'menu_play' }],
         [{ text: '👤 Профиль', callback_data: 'menu_profile' }, { text: '💰 Банк', callback_data: 'menu_bank' }],
-        [{ text: '🏆 Топ', callback_data: 'menu_top' }, { text: '🏴☠ Ранг', callback_data: 'menu_rank' }],
+        [{ text: '🏆 Топ', callback_data: 'menu_top' }, { text: '🏴‍☠️ Ранг', callback_data: 'menu_rank' }],
         [{ text: '💳 Пополнить', callback_data: 'menu_topup' }, { text: '📈 Доля', callback_data: 'menu_share' }],
-        [{ text: '⚔ Сундук', callback_data: 'menu_sunduk' }, { text: '🌊 Доход', callback_data: 'menu_income' }],
-        [{ text: '🎴 Блэкджек', callback_data: 'menu_blackjack' }, { text: '⚔ Турнир', callback_data: 'menu_tournament' }],
+        [{ text: '⚔️ Сундук', callback_data: 'menu_sunduk' }, { text: '🌊 Доход', callback_data: 'menu_income' }],
+        [{ text: '🎴 Блэкджек', callback_data: 'menu_blackjack' }, { text: '⚔️ Турнир', callback_data: 'menu_tournament' }],
         [{ text: '🚢 Пиратский флот', callback_data: 'menu_fleet' }, { text: '📈 Инвестиции', callback_data: 'menu_invest' }],
-        [{ text: '⬆ Лимит ставок', callback_data: 'menu_limit' }, { text: '🎮 Демо', callback_data: 'menu_demo' }],                        [{ text: '🏆 Достижения', callback_data: 'menu_achievements' }],
+        [{ text: '⬆️ Лимит ставок', callback_data: 'menu_limit' }, { text: '🎮 Демо', callback_data: 'menu_demo' }],
+        [{ text: '🏆 Достижения', callback_data: 'menu_achievements' }],
         [{ text: '❓ Помощь', callback_data: 'menu_help' }]
-      ]                                                                                                                                }
+      ]
+    }
   };
 }
 
@@ -892,19 +904,24 @@ function adminInlineKeyboard() {
     reply_markup: {
       inline_keyboard: [
         [{ text: '📋 Очередь', callback_data: 'admin_queue' }, { text: '✅ Подтвердить', callback_data: 'admin_approve' }],
-        [{ text: '💰 Начислить', callback_data: 'admin_addbalance' }, { text: '📋 История', callback_data: 'admin_history' }],             [{ text: '⚔ Активировать Сундук', callback_data: 'admin_sunduk' }, { text: '✅ Активировать долю', callback_data: 'admin_share' }],
-        [{ text: '⛔ Забанить', callback_data: 'admin_ban' }, { text: '🔓 Разбанить', callback_data: 'admin_unban' }],                     [{ text: '📊 Статистика', callback_data: 'admin_stats' }, { text: '🔄 Перезапустить раунд', callback_data: 'admin_round' }],                                                                                                                                          [{ text: '🔧 Тех. работы', callback_data: 'admin_maintenance' }, { text: '✅ Отключить тех. работы', callback_data: 'admin_maintenance_off' }],
-        [{ text: '⬅ Назад', callback_data: 'admin_back' }]                                                                               ]
-    }                                                                                                                                };
+        [{ text: '💰 Начислить', callback_data: 'admin_addbalance' }, { text: '📋 История', callback_data: 'admin_history' }],
+        [{ text: '⚔️ Активировать Сундук', callback_data: 'admin_sunduk' }, { text: '✅ Активировать долю', callback_data: 'admin_share' }],
+        [{ text: '⛔ Забанить', callback_data: 'admin_ban' }, { text: '🔓 Разбанить', callback_data: 'admin_unban' }],
+        [{ text: '📊 Статистика', callback_data: 'admin_stats' }, { text: '🔄 Перезапустить раунд', callback_data: 'admin_round' }],
+        [{ text: '🔧 Тех. работы', callback_data: 'admin_maintenance' }, { text: '✅ Отключить тех. работы', callback_data: 'admin_maintenance_off' }],
+        [{ text: '⬅️ Назад', callback_data: 'admin_back' }]
+      ]
+    }
+  };
 }
 
 function gameModeKeyboard() {
   return {
     reply_markup: {
       inline_keyboard: [
-        [{ text: '🎲 Классика', callback_data: 'mode_classic' }, { text: '⚔ Дуэль', callback_data: 'mode_duel' }],
+        [{ text: '🎲 Классика', callback_data: 'mode_classic' }, { text: '⚔️ Дуэль', callback_data: 'mode_duel' }],
         [{ text: '👑 VIP-игра', callback_data: 'mode_vip' }],
-        [{ text: '⬅ Назад', callback_data: 'menu_back' }]
+        [{ text: '⬅️ Назад', callback_data: 'menu_back' }]
       ]
     }
   };
@@ -915,7 +932,7 @@ function duelCurrencyKeyboard() {
     reply_markup: {
       inline_keyboard: [
         [{ text: '💵 Дублоны', callback_data: 'duel_currency_dublons' }, { text: '💰 Реальные деньги', callback_data: 'duel_currency_money' }],
-        [{ text: '⬅ Назад', callback_data: 'menu_back' }]
+        [{ text: '⬅️ Назад', callback_data: 'menu_back' }]
       ]
     }
   };
@@ -926,7 +943,7 @@ function gameActionsKeyboard() {
     reply_markup: {
       inline_keyboard: [
         [{ text: '🎲 Бросить', callback_data: 'game_roll' }],
-        [{ text: '⬅ Назад', callback_data: 'menu_back' }]
+        [{ text: '⬅️ Назад', callback_data: 'menu_back' }]
       ]
     }
   };
@@ -937,14 +954,21 @@ function doubleActionsKeyboard() {
     reply_markup: {
       inline_keyboard: [
         [{ text: '⚡ Удвоить', callback_data: 'game_double' }, { text: '💰 Забрать', callback_data: 'game_take' }],
-        [{ text: '⬅ Назад', callback_data: 'menu_back' }]
+        [{ text: '⬅️ Назад', callback_data: 'menu_back' }]
       ]
     }
-  };                                                                                                                               }
-                                                                                                                                   function profileInlineKeyboard() {                                                                                                   return {                                                                                                                             reply_markup: {                                                                                                                      inline_keyboard: [
-        [{ text: '📊 Баланс', callback_data: 'profile_balance' }, { text: '🎁 Бонус', callback_data: 'profile_bonus' }],                   [{ text: '🔗 Рефералка', callback_data: 'profile_referral' }, { text: '💸 Вывод', callback_data: 'profile_withdraw' }],            [{ text: '📈 Статистика', callback_data: 'profile_stats' }, { text: '📋 История выводов', callback_data: 'profile_withdraw_history' }],
+  };
+}
+
+function profileInlineKeyboard() {
+  return {
+    reply_markup: {
+      inline_keyboard: [
+        [{ text: '📊 Баланс', callback_data: 'profile_balance' }, { text: '🎁 Бонус', callback_data: 'profile_bonus' }],
+        [{ text: '🔗 Рефералка', callback_data: 'profile_referral' }, { text: '💸 Вывод', callback_data: 'profile_withdraw' }],
+        [{ text: '📈 Статистика', callback_data: 'profile_stats' }, { text: '📋 История выводов', callback_data: 'profile_withdraw_history' }],
         [{ text: '💝 Подарки', callback_data: 'menu_gifts' }],
-        [{ text: '⬅ Назад', callback_data: 'menu_back' }]
+        [{ text: '⬅️ Назад', callback_data: 'menu_back' }]
       ]
     }
   };
@@ -956,29 +980,33 @@ function giftKeyboard() {
       inline_keyboard: [
         [{ text: '💝 Отправить подарок', callback_data: 'gift_send' }],
         [{ text: '📋 История подарков', callback_data: 'gift_history' }],
-        [{ text: '⬅ Назад', callback_data: 'menu_back' }]
-      ]                                                                                                                                }
+        [{ text: '⬅️ Назад', callback_data: 'menu_back' }]
+      ]
+    }
   };
 }
 
 function investmentKeyboard() {
   return {
     reply_markup: {
-      inline_keyboard: [                                                                                                                   [{ text: '📊 Мои инвестиции', callback_data: 'invest_my' }],
+      inline_keyboard: [
+        [{ text: '📊 Мои инвестиции', callback_data: 'invest_my' }],
         [{ text: '💰 Новая инвестиция', callback_data: 'invest_new' }],
         [{ text: '💸 Забрать инвестицию', callback_data: 'invest_withdraw' }],
         [{ text: '📈 Статистика', callback_data: 'invest_stats' }],
-        [{ text: '⬅ Назад', callback_data: 'menu_back' }]
+        [{ text: '⬅️ Назад', callback_data: 'menu_back' }]
       ]
     }
   };
 }
-                                                                                                                                   function limitKeyboard() {
+
+function limitKeyboard() {
   return {
-    reply_markup: {                                                                                                                      inline_keyboard: [
+    reply_markup: {
+      inline_keyboard: [
         [{ text: '📊 Мой лимит', callback_data: 'limit_my' }],
-        [{ text: '⬆ Увеличить лимит', callback_data: 'limit_upgrade' }],
-        [{ text: '⬅ Назад', callback_data: 'menu_back' }]
+        [{ text: '⬆️ Увеличить лимит', callback_data: 'limit_upgrade' }],
+        [{ text: '⬅️ Назад', callback_data: 'menu_back' }]
       ]
     }
   };
@@ -990,7 +1018,7 @@ function achievementKeyboard() {
       inline_keyboard: [
         [{ text: '🏆 Мои достижения', callback_data: 'ach_my' }],
         [{ text: '📋 Все достижения', callback_data: 'ach_list' }],
-        [{ text: '⬅ Назад', callback_data: 'menu_back' }]
+        [{ text: '⬅️ Назад', callback_data: 'menu_back' }]
       ]
     }
   };
@@ -1003,43 +1031,55 @@ function shareInlineKeyboard() {
         [{ text: '📈 1% (1500 ₽)', callback_data: 'share_1' }, { text: '📈 3% (4000 ₽)', callback_data: 'share_3' }],
         [{ text: '📈 5% (6000 ₽)', callback_data: 'share_5' }, { text: '📈 10% (10000 ₽)', callback_data: 'share_10' }],
         [{ text: '📉 Продать долю', callback_data: 'share_sell' }],
-        [{ text: '⬅ Назад', callback_data: 'menu_back' }]
+        [{ text: '⬅️ Назад', callback_data: 'menu_back' }]
       ]
     }
   };
 }
 
 function rankInlineKeyboard() {
-  const buttons = [];                                                                                                                for (let i = 1; i < RANKS.length; i++) {
+  const buttons = [];
+  for (let i = 1; i < RANKS.length; i++) {
     buttons.push([{ text: `${RANKS[i].emoji} ${RANKS[i].name} — ${RANKS[i].costDublons} дуб.`, callback_data: `rank_${i}` }]);
   }
-  buttons.push([{ text: '⬅ Назад', callback_data: 'menu_back' }]);
+  buttons.push([{ text: '⬅️ Назад', callback_data: 'menu_back' }]);
   return { reply_markup: { inline_keyboard: buttons } };
 }
 
-function withdrawInlineKeyboard() {                                                                                                  return {
+function withdrawInlineKeyboard() {
+  return {
     reply_markup: {
       inline_keyboard: [
         [{ text: '💸 50', callback_data: 'withdraw_50' }, { text: '💸 100', callback_data: 'withdraw_100' }, { text: '💸 200', callback_data: 'withdraw_200' }],
         [{ text: '💸 500', callback_data: 'withdraw_500' }, { text: '💸 1000', callback_data: 'withdraw_1000' }],
-        [{ text: '⬅ Назад', callback_data: 'menu_back' }]
-      ]
-    }
-  };                                                                                                                               }
-
-function collectInlineKeyboard() {                                                                                                   return {
-    reply_markup: {
-      inline_keyboard: [
-        [{ text: '💰 Забрать доход', callback_data: 'collect_take' }],
-        [{ text: '⬅ Назад', callback_data: 'menu_back' }]
+        [{ text: '⬅️ Назад', callback_data: 'menu_back' }]
       ]
     }
   };
 }
 
-function sundukInlineKeyboard() {                                                                                                    return {
-    reply_markup: {                                                                                                                      inline_keyboard: [                                                                                                                   [{ text: '🟢 Низкий риск', callback_data: 'sunduk_1' }],                                                                           [{ text: '🟡 Средний риск', callback_data: 'sunduk_2' }],                                                                          [{ text: '🔴 Высокий риск', callback_data: 'sunduk_3' }],
-        [{ text: '⚫ Экстремальный риск', callback_data: 'sunduk_4' }],                                                                    [{ text: '🎁 Бесплатный сундук', callback_data: 'sunduk_free' }],                                                                  [{ text: '📊 Моя статистика', callback_data: 'sunduk_stats' }],                                                                    [{ text: '⬅ Назад', callback_data: 'menu_back' }]
+function collectInlineKeyboard() {
+  return {
+    reply_markup: {
+      inline_keyboard: [
+        [{ text: '💰 Забрать доход', callback_data: 'collect_take' }],
+        [{ text: '⬅️ Назад', callback_data: 'menu_back' }]
+      ]
+    }
+  };
+}
+
+function sundukInlineKeyboard() {
+  return {
+    reply_markup: {
+      inline_keyboard: [
+        [{ text: '🟢 Низкий риск', callback_data: 'sunduk_1' }],
+        [{ text: '🟡 Средний риск', callback_data: 'sunduk_2' }],
+        [{ text: '🔴 Высокий риск', callback_data: 'sunduk_3' }],
+        [{ text: '⚫ Экстремальный риск', callback_data: 'sunduk_4' }],
+        [{ text: '🎁 Бесплатный сундук', callback_data: 'sunduk_free' }],
+        [{ text: '📊 Моя статистика', callback_data: 'sunduk_stats' }],
+        [{ text: '⬅️ Назад', callback_data: 'menu_back' }]
       ]
     }
   };
@@ -1064,7 +1104,7 @@ function duelCancelKeyboard() {
       ]
     }
   };
-}
+    }
 
 // ==================== ОБРАБОТЧИК КОМАНДЫ /start ====================
 bot.onText(/\/start/, (msg) => {
@@ -1072,6 +1112,13 @@ bot.onText(/\/start/, (msg) => {
   const p = getPlayer(id);
   if (!p) return;
   p.username = msg.from.username || 'noname';
+
+  // ===== ПРОВЕРКА АКТИВНОСТИ ПОЛЬЗОВАТЕЛЯ =====
+  const lastActivity = p.lastActivity || 0;
+  if (Date.now() - lastActivity > 600000) {
+    bot.sendMessage(id, '🏴‍☠️ Добро пожаловать обратно!');
+  }
+  p.lastActivity = Date.now();
 
   const args = msg.text.split(' ');
   if (args.length > 1 && args[0] === '/start' && args[1].startsWith('ref_')) {
@@ -1086,14 +1133,21 @@ bot.onText(/\/start/, (msg) => {
         addHistory(refId, `Реферал: +30 дуб. за @${p.username || id}`);
         addBalanceHistory(refId, 30, `Реферал @${p.username || id}`);
         addHistory(id, `Приветственный бонус: +15 дуб. от @${players[refId].username || refId}`);
-        addBalanceHistory(id, 15, `Реферальный бонус`);                                                                                    saveData();
-        bot.sendMessage(refId, `🎁 Твой друг @${p.username || id} зарегистрировался! +30 дуб.`);                                           bot.sendMessage(id, `🎁 Приветственный бонус +15 дуб. от @${players[refId].username || refId}!`);                                }                                                                                                                                }                                                                                                                                }
+        addBalanceHistory(id, 15, `Реферальный бонус`);
+        saveData();
+        bot.sendMessage(refId, `🎁 Твой друг @${p.username || id} зарегистрировался! +30 дуб.`);
+        bot.sendMessage(id, `🎁 Приветственный бонус +15 дуб. от @${players[refId].username || refId}!`);
+      }
+    }
+  }
 
-  addHistory(id, 'Зарегистрировался');                                                                                               addBalanceHistory(id, 10, 'Начальный баланс');                                                                                     saveData();
+  addHistory(id, 'Зарегистрировался');
+  addBalanceHistory(id, 10, 'Начальный баланс');
+  saveData();
   const rank = RANKS[p.rank];
   const balance = p.demoMode ? safeNumber(p.demoBalance) : safeNumber(p.balance);
   bot.sendMessage(id,
-    `🏴☠ Добро пожаловать в ЧЁРНУЮ КОСТЬ!\n\n` +
+    `🏴‍☠️ Добро пожаловать в ЧЁРНУЮ КОСТЬ!\n\n` +
     `Баланс: ${balance} дуб.\n` +
     `Ранг: ${rank.emoji} ${rank.name} (+${rank.bonus}% к выигрышу)\n` +
     `Доля: ${p.share}% банка\n` +
@@ -1104,34 +1158,43 @@ bot.onText(/\/start/, (msg) => {
 });
 
 // ==================== ОБРАБОТЧИК /admin ====================
-bot.onText(/\/admin/, (msg) => {                                                                                                     if (msg.chat.id !== ADMIN_ID) return;
+bot.onText(/\/admin/, (msg) => {
+  if (msg.chat.id !== ADMIN_ID) return;
   bot.sendMessage(msg.chat.id, `👑 АДМИН-ПАНЕЛЬ\nВыбери действие:`, adminInlineKeyboard());
 });
 
 // ==================== ОСНОВНОЙ ОБРАБОТЧИК CALLBACK_QUERY ====================
 bot.on('callback_query', async (query) => {
   const id = query.from.id;
-  const data = query.data;                                                                                                         // Отвечаем на callback БЕЗ ожидания, чтобы не блокировать выполнение
-bot.answerCallbackQuery(query.id).catch(err => console.log('⚠ Ошибка answerCallbackQuery:', err.message));
-console.log('📥 CALLBACK ПОЛУЧЕН:', data, 'от', id);
-// ===== ЗАЩИТА ОТ ДУБЛИРОВАНИЯ (ПО USER + ACTION) =====                                                                           if (!global.callbackCooldown) global.callbackCooldown = {};
-const currentTime = Date.now();
-const cooldownKey = `${id}_${data}`;
-if (global.callbackCooldown[cooldownKey] && currentTime - global.callbackCooldown[cooldownKey] < 1500) {
-  console.log(`⏳ Дублирование ${data} от ${id} игнорировано`);
-  return;                                                                                                                          }
-global.callbackCooldown[cooldownKey] = currentTime;
-  const p = getPlayer(id);                                                                                                           if (!p) return;
+  const data = query.data;
+
+  // Отвечаем на callback БЕЗ ожидания
+  bot.answerCallbackQuery(query.id).catch(err => console.log('⚠️ Ошибка answerCallbackQuery:', err.message));
+  console.log('📥 CALLBACK ПОЛУЧЕН:', data, 'от', id);
+
+  // ===== ЗАЩИТА ОТ ДУБЛИРОВАНИЯ =====
+  if (!global.callbackCooldown) global.callbackCooldown = {};
+  const currentTime = Date.now();
+  const cooldownKey = `${id}_${data}`;
+  if (global.callbackCooldown[cooldownKey] && currentTime - global.callbackCooldown[cooldownKey] < 1500) {
+    console.log(`⏳ Дублирование ${data} от ${id} игнорировано`);
+    return;
+  }
+  global.callbackCooldown[cooldownKey] = currentTime;
+
+  const p = getPlayer(id);
+  if (!p) return;
 
   // ===== ПРОВЕРКА ТЕХНИЧЕСКИХ РАБОТ =====
   if (isMaintenanceActive()) {
     const timeLeft = Math.max(0, Math.ceil((maintenanceEndTime - Date.now()) / 60000));
-    return bot.sendMessage(id,
+    bot.sendMessage(id,
       `🔧 БОТ НА ТЕХНИЧЕСКИХ РАБОТАХ\n\n` +
       `${maintenanceMessage}\n` +
       `⏳ Осталось примерно: ${timeLeft} минут\n` +
       `Приносим извинения за неудобства! 🙏`
     );
+    return;
   }
 
   if (safeNumber(bank.pot) < 1000 && safeNumber(bank.commission) > 0) {
@@ -1157,21 +1220,25 @@ global.callbackCooldown[cooldownKey] = currentTime;
   }
 
   // ==================== АДМИН ====================
-         if (id === ADMIN_ID) {
+  if (id === ADMIN_ID) {
     if (data === 'admin_queue') {
       if (!withdrawQueue.length) return bot.sendMessage(id, 'Очередь пуста.');
       let msgText = '📋 ОЧЕРЕДЬ ВЫВОДОВ:\n\n';
-      withdrawQueue.forEach((q, i) => {                                                                                                    msgText += `${i+1}. @${q.username || q.id} — ${q.amount} дуб. (${new Date(q.time).toLocaleTimeString()})\n`;
+      withdrawQueue.forEach((q, i) => {
+        msgText += `${i+1}. @${q.username || q.id} — ${q.amount} дуб. (${new Date(q.time).toLocaleTimeString()})\n`;
       });
       bot.sendMessage(id, msgText);
-      return;                                                                                                                          }
+      return;
+    }
     if (data === 'admin_approve') {
       if (!withdrawQueue.length) return bot.sendMessage(id, 'Очередь пуста.');
       let msgText = '📋 Введи номер заявки для подтверждения:\n\n';
       withdrawQueue.forEach((q, i) => {
-        msgText += `${i+1}. @${q.username || q.id} — ${q.amount} дуб.\n`;                                                                });
+        msgText += `${i+1}. @${q.username || q.id} — ${q.amount} дуб.\n`;
+      });
       adminState[id] = { action: 'approve' };
-      bot.sendMessage(id, msgText);                                                                                                      return;
+      bot.sendMessage(id, msgText);
+      return;
     }
     if (data === 'admin_addbalance') {
       adminState[id] = { action: 'addbalance' };
@@ -1181,10 +1248,17 @@ global.callbackCooldown[cooldownKey] = currentTime;
     if (data === 'admin_history') {
       adminState[id] = { action: 'history' };
       bot.sendMessage(id, '📋 Введи ID игрока для просмотра истории:');
-      return;                                                                                                                          }
-    if (data === 'admin_sunduk') {                                                                                                       adminState[id] = { action: 'sunduk' };                                                                                             bot.sendMessage(id, '⚔ Введи ID игрока для активации Сундука:');                                                                   return;                                                                                                                          }
+      return;
+    }
+    if (data === 'admin_sunduk') {
+      adminState[id] = { action: 'sunduk' };
+      bot.sendMessage(id, '⚔️ Введи ID игрока для активации Сундука:');
+      return;
+    }
     if (data === 'admin_share') {
-      adminState[id] = { action: 'share_activate' };                                                                                     bot.sendMessage(id, '📈 Введи ID игрока и процент доли через пробел:\nПример: 6301554862 5');                                      return;
+      adminState[id] = { action: 'share_activate' };
+      bot.sendMessage(id, '📈 Введи ID игрока и процент доли через пробел:\nПример: 6301554862 5');
+      return;
     }
     if (data === 'admin_ban') {
       adminState[id] = { action: 'ban' };
@@ -1229,12 +1303,19 @@ global.callbackCooldown[cooldownKey] = currentTime;
       );
       return;
     }
-               if (data === 'admin_maintenance_off') {
+    if (data === 'admin_maintenance_off') {
       if (!maintenanceMode) {
-        bot.answerCallbackQuery(query.id, { text: '❌ Тех. работы не активны.' });                                                         return;
-      }                                                                                                                                  disableMaintenance();                                                                                                              bot.answerCallbackQuery(query.id, { text: '✅ Тех. работы отключены!' });                                                          bot.sendMessage(id, '✅ Технические работы отключены! Игроки оповещены.');                                                         return;
+        bot.answerCallbackQuery(query.id, { text: '❌ Тех. работы не активны.' });
+        return;
+      }
+      disableMaintenance();
+      bot.answerCallbackQuery(query.id, { text: '✅ Тех. работы отключены!' });
+      bot.sendMessage(id, '✅ Технические работы отключены! Игроки оповещены.');
+      return;
     }
-    if (data === 'admin_back') {                                                                                                         delete adminState[id];                                                                                                             bot.sendMessage(id, `Главное меню:`, mainInlineKeyboard());
+    if (data === 'admin_back') {
+      delete adminState[id];
+      bot.sendMessage(id, `Главное меню:`, mainInlineKeyboard());
       return;
     }
   }
@@ -1243,7 +1324,7 @@ global.callbackCooldown[cooldownKey] = currentTime;
   if (data === 'menu_blackjack') {
     const balance = p.demoMode ? safeNumber(p.demoBalance) : safeNumber(p.balance);
     if (balance < BLACKJACK_CONFIG.minBet) {
-      bot.answerCallbackQuery(query.id, { text: `❌ Минимальная ставка ${BLACKJACK_CONFIG.minBet} дуб.` });
+      bot.sendMessage(id, `❌ Минимальная ставка ${BLACKJACK_CONFIG.minBet} дуб.`);
       return;
     }
     // Принудительно удаляем старую игру
@@ -1257,7 +1338,8 @@ global.callbackCooldown[cooldownKey] = currentTime;
       `💰 Твой баланс: ${balance} дуб.\n` +
       `🎯 Минимальная ставка: ${BLACKJACK_CONFIG.minBet}\n` +
       `🎯 Максимальная ставка: ${BLACKJACK_CONFIG.maxBet}\n\n` +
-      `Введи сумму ставки:`                                                                                                            );
+      `Введи сумму ставки:`
+    );
     return;
   }
 
@@ -1266,15 +1348,17 @@ global.callbackCooldown[cooldownKey] = currentTime;
     if (!game || game.status === 'finished') {
       bot.sendMessage(id, '❌ Игра не активна.');
       return;
-    }                                                                                                                                  if (game.status === 'waiting') {
-      bot.answerCallbackQuery(query.id, { text: '❌ Сначала сделай ставку.' });
-      return;                                                                                                                          }
+    }
+    if (game.status === 'waiting') {
+      bot.sendMessage(id, '❌ Сначала сделай ставку.');
+      return;
+    }
 
     // ===== ЛОГИКА ДЛЯ СПЛИТА =====
     if (game.status === 'split' && game.splitHands.length > 0) {
       const hand = game.splitHands[game.currentSplit];
       if (!hand) {
-        bot.answerCallbackQuery(query.id, { text: '❌ Ошибка руки.' });
+        bot.sendMessage(id, '❌ Ошибка руки.');
         return;
       }
       const deck = game.deck;
@@ -1319,7 +1403,8 @@ global.callbackCooldown[cooldownKey] = currentTime;
             `🎴 Рука ${game.currentSplit + 1}: ${formatHand(hand)} (${value} очков)\n💰 Ставка: ${game.bet} дуб.`,
             blackjackKeyboard()
           );
-        }                                                                                                                                }
+        }
+      }
       return;
     }
 
@@ -1331,7 +1416,13 @@ global.callbackCooldown[cooldownKey] = currentTime;
       finishBlackjack(id);
       return;
     }
-    game.playerHand.push(deck.pop());                                                                                                  const value = getHandValue(game.playerHand);                                                                                       if (value > 21) {                                                                                                                    game.status = 'finished';                                                                                                          finishBlackjack(id);                                                                                                               return;                                                                                                                          }
+    game.playerHand.push(deck.pop());
+    const value = getHandValue(game.playerHand);
+    if (value > 21) {
+      game.status = 'finished';
+      finishBlackjack(id);
+      return;
+    }
     bot.sendMessage(id, `🎴 Твоя рука: ${formatHand(game.playerHand)} (${value} очков)`, blackjackKeyboard());
     return;
   }
@@ -1369,61 +1460,65 @@ global.callbackCooldown[cooldownKey] = currentTime;
     return;
   }
 
-if (data === 'bj_double') {
-  const game = blackjackGames[id];
-  if (!game || game.status === 'finished') {
-    bot.sendMessage(id, '❌ Игра не активна.');
-    return;
-  }
-  if (game.playerHand.length !== 2) {
-    bot.answerCallbackQuery(query.id, { text: '❌ Удвоить можно только после первых двух карт.' });
-    return;
-  }
-  const balance = p.demoMode ? safeNumber(p.demoBalance) : safeNumber(p.balance);
-  if (balance < game.bet) {
-    bot.answerCallbackQuery(query.id, { text: `❌ Не хватает. Нужно ${game.bet} дуб.` });
-    return;
-      }                                                                                                                                  if (p.demoMode) {                                                                                                                    p.demoBalance = safeNumber(p.demoBalance) - game.bet;                                                                            } else {                                                                                                                             p.balance = safeNumber(p.balance) - game.bet;
-  }
-  game.bet *= 2;
-  game.status = 'doubled';
-  const deck = game.deck;
-  if (!deck || deck.length === 0) {
-    bot.sendMessage(id, '❌ Колода пуста! Игра завершена.');
+  if (data === 'bj_double') {
+    const game = blackjackGames[id];
+    if (!game || game.status === 'finished') {
+      bot.sendMessage(id, '❌ Игра не активна.');
+      return;
+    }
+    if (game.playerHand.length !== 2) {
+      bot.sendMessage(id, '❌ Удвоить можно только после первых двух карт.');
+      return;
+    }
+    const balance = p.demoMode ? safeNumber(p.demoBalance) : safeNumber(p.balance);
+    if (balance < game.bet) {
+      bot.sendMessage(id, `❌ Не хватает. Нужно ${game.bet} дуб.`);
+      return;
+    }
+    if (p.demoMode) {
+      p.demoBalance = safeNumber(p.demoBalance) - game.bet;
+    } else {
+      p.balance = safeNumber(p.balance) - game.bet;
+    }
+    game.bet *= 2;
+    game.status = 'doubled';
+    const deck = game.deck;
+    if (!deck || deck.length === 0) {
+      bot.sendMessage(id, '❌ Колода пуста! Игра завершена.');
+      game.status = 'finished';
+      finishBlackjack(id);
+      return;
+    }
+    game.playerHand.push(deck.pop());
+    const value = getHandValue(game.playerHand);
+    if (value > 21) {
+      game.status = 'finished';
+      finishBlackjack(id);
+      return;
+    }
     game.status = 'finished';
     finishBlackjack(id);
     return;
   }
-  game.playerHand.push(deck.pop());
-  const value = getHandValue(game.playerHand);
-  if (value > 21) {
-    game.status = 'finished';
-    finishBlackjack(id);
-    return;
-  }
-  game.status = 'finished';
-  finishBlackjack(id);
-  bot.answerCallbackQuery(query.id);
-  return;
-}
 
   if (data === 'bj_split') {
     const game = blackjackGames[id];
     if (!game || game.status === 'finished') {
-      bot.answerCallbackQuery(query.id, { text: '❌ Игра не активна.' });
-      return;                                                                                                                          }
+      bot.sendMessage(id, '❌ Игра не активна.');
+      return;
+    }
     if (game.status !== 'playing') {
-      bot.answerCallbackQuery(query.id, { text: '❌ Сейчас нельзя сделать сплит.' });
+      bot.sendMessage(id, '❌ Сейчас нельзя сделать сплит.');
       return;
     }
     if (game.playerHand.length !== 2 || game.playerHand[0].rank !== game.playerHand[1].rank) {
-      bot.answerCallbackQuery(query.id, { text: '❌ Сплит доступен только при двух одинаковых картах.' });
+      bot.sendMessage(id, '❌ Сплит доступен только при двух одинаковых картах.');
       return;
     }
 
     const balance = p.demoMode ? safeNumber(p.demoBalance) : safeNumber(p.balance);
     if (balance < game.bet) {
-      bot.answerCallbackQuery(query.id, { text: `❌ Не хватает. Нужно ${game.bet} дуб.` });
+      bot.sendMessage(id, `❌ Не хватает. Нужно ${game.bet} дуб.`);
       return;
     }
 
@@ -1451,9 +1546,8 @@ if (data === 'bj_double') {
     const hand = game.splitHands[0];
     const value = getHandValue(hand);
 
-    bot.answerCallbackQuery(query.id, { text: '✂ Сплит выполнен!' });
     bot.sendMessage(id,
-      `✂ СПЛИТ!\n\n` +
+      `✂️ СПЛИТ!\n\n` +
       `Рука 1: ${formatHand(hand)} (${value} очков)\n` +
       `💰 Ставка: ${game.bet} дуб. (каждая рука)\n\n` +
       `Ходи рукой 1:`,
@@ -1462,16 +1556,15 @@ if (data === 'bj_double') {
     return;
   }
 
-         if (data === 'bj_quit') {
+  if (data === 'bj_quit') {
     delete blackjackGames[id];
-    bot.answerCallbackQuery(query.id, { text: '❌ Игра завершена.' });
-    const balance = p.demoMode ? safeNumber(p.demoBalance) : safeNumber(p.balance);
-    bot.sendMessage(id, `❌ Игра завершена. Баланс: ${balance} дуб.`, mainInlineKeyboard());
-    return;                                                                                                                          }
+    bot.sendMessage(id, `❌ Игра завершена.`, mainInlineKeyboard());
+    return;
+                        }
 
-  // ==================== ТУРНИРЫ ====================
+       // ==================== ТУРНИРЫ ====================
   if (data === 'menu_tournament') {
-    bot.sendMessage(id, `⚔ ТУРНИРЫ\n\nВыбери действие:`, tournamentKeyboard());
+    bot.sendMessage(id, `⚔️ ТУРНИРЫ\n\nВыбери действие:`, tournamentKeyboard());
     return;
   }
 
@@ -1484,12 +1577,16 @@ if (data === 'bj_double') {
     const hours = Math.floor(timeLeft / 3600000);
     const minutes = Math.floor((timeLeft % 3600000) / 60000);
     bot.sendMessage(id,
-      `⚔ ИНФО О ТУРНИРЕ\n\n` +
+      `⚔️ ИНФО О ТУРНИРЕ\n\n` +
       `📊 Участников: ${tournaments.players.length}\n` +
       `💰 Призовой фонд: ${tournaments.prizePool} дуб.\n` +
       `⏳ До конца: ${hours}ч ${minutes}м\n` +
       `🏆 Победитель получит 50% призового фонда!\n` +
-      `💰 Вход: ${TOURNAMENT_CONFIG.entryFee} дуб.`,                                                                                     tournamentKeyboard()                                                                                                             );                                                                                                                                 return;                                                                                                                          }
+      `💰 Вход: ${TOURNAMENT_CONFIG.entryFee} дуб.`,
+      tournamentKeyboard()
+    );
+    return;
+  }
 
   if (data === 'tournament_join') {
     if (!tournaments.active) {
@@ -1544,16 +1641,20 @@ if (data === 'bj_double') {
       bot.sendMessage(id, `📋 У тебя нет кораблей. Купи их в магазине!`, fleetKeyboard());
       return;
     }
-        let msg = `🚢 ТВОЙ ФЛОТ:\n\n`;                                                                                                     let totalIncome = 0;                                                                                                               for (let shipData of p.fleet.ships) {
+    let msg = `🚢 ТВОЙ ФЛОТ:\n\n`;
+    let totalIncome = 0;
+    for (let shipData of p.fleet.ships) {
       const ship = SHIPS.find(s => s.id === shipData.id);
       if (ship) {
         const income = getShipIncome({ ...ship, level: shipData.level });
         totalIncome += income;
         msg += `${ship.name} (Уровень ${shipData.level}) — доход ${income} дуб./час\n`;
-      }                                                                                                                                }
+      }
+    }
     msg += `\n💰 Общий доход: ${totalIncome} дуб./час`;
     bot.sendMessage(id, msg, fleetKeyboard());
-    return;                                                                                                                          }
+    return;
+  }
 
   if (data === 'fleet_buy') {
     let msg = `🛒 ДОСТУПНЫЕ КОРАБЛИ:\n\n`;
@@ -1571,8 +1672,9 @@ if (data === 'bj_double') {
   if (data === 'fleet_upgrade') {
     if (!p.fleet || p.fleet.ships.length === 0) {
       bot.sendMessage(id, `📋 У тебя нет кораблей для улучшения.`, fleetKeyboard());
-      return;                                                                                                                          }
-    let msg = `⬆ УЛУЧШЕНИЕ КОРАБЛЕЙ:\n\n`;
+      return;
+    }
+    let msg = `⬆️ УЛУЧШЕНИЕ КОРАБЛЕЙ:\n\n`;
     for (let shipData of p.fleet.ships) {
       const ship = SHIPS.find(s => s.id === shipData.id);
       if (ship) {
@@ -1583,7 +1685,8 @@ if (data === 'bj_double') {
     }
     msg += `\n💰 Твой баланс: ${p.demoMode ? safeNumber(p.demoBalance) : safeNumber(p.balance)} дуб.\n\nВведи ID корабля (цифра в квадратных скобках) для улучшения (или напиши "отмена" для отмены):`;
     adminState[id] = { action: 'fleet_upgrade' };
-    bot.sendMessage(id, msg);                                                                                                          return;
+    bot.sendMessage(id, msg);
+    return;
   }
 
   if (data === 'fleet_collect') {
@@ -1622,20 +1725,25 @@ if (data === 'bj_double') {
     return;
   }
 
-         if (data === 'invest_my') {
+  if (data === 'invest_my') {
     if (!p.investments || p.investments.length === 0) {
       bot.sendMessage(id, `📊 У тебя нет активных инвестиций.`, investmentKeyboard());
-      return;                                                                                                                          }
+      return;
+    }
     let msg = '📊 ТВОИ ИНВЕСТИЦИИ:\n\n';
     let total = 0;
-    let totalProfit = 0;                                                                                                               p.investments.forEach((inv, i) => {
+    let totalProfit = 0;
+    p.investments.forEach((inv, i) => {
       const elapsed = Date.now() - inv.startTime;
-      const days = elapsed / 86400000;                                                                                                   const earned = Math.floor(inv.amount * (INVESTMENT_CONFIG.percentPerDay / 100) * days);
+      const days = elapsed / 86400000;
+      const earned = Math.floor(inv.amount * (INVESTMENT_CONFIG.percentPerDay / 100) * days);
       const status = inv.withdrawn ? '✅ ЗАВЕРШЕНА' : '⏳ АКТИВНА';
       total += inv.amount;
-      if (!inv.withdrawn) totalProfit += earned;                                                                                         msg += `${i+1}. ${inv.amount} дуб. (${inv.days} дн.) — ${status}\n`;
+      if (!inv.withdrawn) totalProfit += earned;
+      msg += `${i+1}. ${inv.amount} дуб. (${inv.days} дн.) — ${status}\n`;
       msg += `   📈 Заработано: ${earned} дуб.\n`;
-    });                                                                                                                                msg += `\n💰 Всего вложено: ${total} дуб.\n`;
+    });
+    msg += `\n💰 Всего вложено: ${total} дуб.\n`;
     msg += `📈 Общая прибыль: ${totalProfit} дуб.`;
     bot.sendMessage(id, msg, investmentKeyboard());
     return;
@@ -1644,25 +1752,34 @@ if (data === 'bj_double') {
   if (data === 'invest_new') {
     const balance = p.demoMode ? safeNumber(p.demoBalance) : safeNumber(p.balance);
     if (balance < INVESTMENT_CONFIG.minAmount) {
-      bot.sendMessage(id, `❌ Минимальная инвестиция ${INVESTMENT_CONFIG.minAmount} дуб. У тебя ${balance} дуб.`);                       return;
+      bot.sendMessage(id, `❌ Минимальная инвестиция ${INVESTMENT_CONFIG.minAmount} дуб. У тебя ${balance} дуб.`);
+      return;
     }
     adminState[id] = { action: 'invest_new' };
     bot.sendMessage(id,
       `💰 НОВАЯ ИНВЕСТИЦИЯ\n\n` +
       `Введи данные в формате:\n` +
       `<сумма> <дни>\n\n` +
-      `📊 Доступно: ${balance} дуб.\n` +                                                                                                 `📈 Доходность: ${INVESTMENT_CONFIG.percentPerDay}% в день\n` +
+      `📊 Доступно: ${balance} дуб.\n` +
+      `📈 Доходность: ${INVESTMENT_CONFIG.percentPerDay}% в день\n` +
       `📅 Срок: от ${INVESTMENT_CONFIG.minDays} до ${INVESTMENT_CONFIG.maxDays} дней\n` +
       `💰 Минимальная сумма: ${INVESTMENT_CONFIG.minAmount} дуб.\n` +
-      `⚠ При досрочном снятии штраф 50%\n\n` +                                                                                           `Пример: 1000 3`
+      `⚠️ При досрочном снятии штраф 50%\n\n` +
+      `Пример: 1000 3`
     );
-    return;                                                                                                                          }
+    return;
+  }
 
   if (data === 'invest_withdraw') {
     if (!p.investments || p.investments.length === 0) {
       bot.sendMessage(id, `📊 У тебя нет активных инвестиций.`, investmentKeyboard());
       return;
-    }                                                                                                                                  let msg = '💸 ЗАБРАТЬ ИНВЕСТИЦИЮ\n\nВыбери номер инвестиции:\n\n';                                                                 p.investments.forEach((inv, i) => {                                                                                                  if (!inv.withdrawn) {                                                                                                                const elapsed = Date.now() - inv.startTime;                                                                                        const days = elapsed / 86400000;
+    }
+    let msg = '💸 ЗАБРАТЬ ИНВЕСТИЦИЮ\n\nВыбери номер инвестиции:\n\n';
+    p.investments.forEach((inv, i) => {
+      if (!inv.withdrawn) {
+        const elapsed = Date.now() - inv.startTime;
+        const days = elapsed / 86400000;
         const earned = Math.floor(inv.amount * (INVESTMENT_CONFIG.percentPerDay / 100) * days);
         msg += `${i+1}. ${inv.amount} дуб. (${inv.days} дн.) — прибыль ${earned} дуб.\n`;
       }
@@ -1692,39 +1809,49 @@ if (data === 'bj_double') {
     const nextCost = LIMIT_UPGRADE_COST + (p.limitUpgrades || 0) * 500;
     const remaining = MAX_LIMIT_UPGRADES - (p.limitUpgrades || 0);
 
-  bot.sendMessage(id,
-      `⬆ ЛИМИТ СТАВОК\n\n` +
+    bot.sendMessage(id,
+      `⬆️ ЛИМИТ СТАВОК\n\n` +
       `📊 Текущий лимит: ${currentLimit} дуб.\n` +
-      `⬆ Улучшений: ${p.limitUpgrades || 0}/${MAX_LIMIT_UPGRADES}\n` +
+      `⬆️ Улучшений: ${p.limitUpgrades || 0}/${MAX_LIMIT_UPGRADES}\n` +
       `💰 Стоимость следующего улучшения: ${nextCost} дуб.\n` +
       `📈 Следующий лимит: ${currentLimit + 1000} дуб.\n` +
-      `⏳ Осталось улучшений: ${remaining}\n\n` +                                                                                        `Выбери действие:`,
+      `⏳ Осталось улучшений: ${remaining}\n\n` +
+      `Выбери действие:`,
       limitKeyboard()
     );
-    return;                                                                                                                          }
+    return;
+  }
 
-  if (data === 'limit_my') {                                                                                                           const currentLimit = MAX_CLASSIC_BET + (p.limitUpgrades || 0) * 1000;
+  if (data === 'limit_my') {
+    const currentLimit = MAX_CLASSIC_BET + (p.limitUpgrades || 0) * 1000;
     bot.sendMessage(id,
       `📊 ТВОЙ ЛИМИТ СТАВОК\n\n` +
       `💰 Текущий лимит: ${currentLimit} дуб.\n` +
-      `⬆ Улучшений: ${p.limitUpgrades || 0}/${MAX_LIMIT_UPGRADES}\n` +
+      `⬆️ Улучшений: ${p.limitUpgrades || 0}/${MAX_LIMIT_UPGRADES}\n` +
       `📈 Следующий лимит: ${currentLimit + 1000} дуб.\n` +
-      `💰 Стоимость улучшения: ${LIMIT_UPGRADE_COST + (p.limitUpgrades || 0) * 500} дуб.`,                                               limitKeyboard()                                                                                                                  );                                                                                                                                 return;                                                                                                                          }
+      `💰 Стоимость улучшения: ${LIMIT_UPGRADE_COST + (p.limitUpgrades || 0) * 500} дуб.`,
+      limitKeyboard()
+    );
+    return;
+  }
 
   if (data === 'limit_upgrade') {
     const currentUpgrades = p.limitUpgrades || 0;
     if (currentUpgrades >= MAX_LIMIT_UPGRADES) {
       bot.answerCallbackQuery(query.id, { text: '❌ Ты достиг максимального лимита!' });
-      return;                                                                                                                          }
+      return;
+    }
     const cost = LIMIT_UPGRADE_COST + currentUpgrades * 500;
     const balance = p.demoMode ? safeNumber(p.demoBalance) : safeNumber(p.balance);
-    if (balance < cost) {                                                                                                                bot.answerCallbackQuery(query.id, { text: `❌ Не хватает. Нужно ${cost} дуб.` });
+    if (balance < cost) {
+      bot.answerCallbackQuery(query.id, { text: `❌ Не хватает. Нужно ${cost} дуб.` });
       return;
     }
 
     if (p.demoMode) {
       p.demoBalance = safeNumber(p.demoBalance) - cost;
-    } else {                                                                                                                             p.balance = safeNumber(p.balance) - cost;
+    } else {
+      p.balance = safeNumber(p.balance) - cost;
     }
     p.limitUpgrades = currentUpgrades + 1;
 
@@ -1736,7 +1863,7 @@ if (data === 'bj_double') {
     bot.sendMessage(id,
       `✅ ЛИМИТ УВЕЛИЧЕН!\n\n` +
       `💰 Новый лимит: ${MAX_CLASSIC_BET + p.limitUpgrades * 1000} дуб.\n` +
-      `⬆ Улучшений: ${p.limitUpgrades}/${MAX_LIMIT_UPGRADES}\n` +
+      `⬆️ Улучшений: ${p.limitUpgrades}/${MAX_LIMIT_UPGRADES}\n` +
       `📈 Следующий лимит: ${MAX_CLASSIC_BET + (p.limitUpgrades + 1) * 1000} дуб.`,
       mainInlineKeyboard()
     );
@@ -1770,22 +1897,24 @@ if (data === 'bj_double') {
     return;
   }
 
-         if (data === 'ach_list') {
+  if (data === 'ach_list') {
     const unlocked = p.achievements || [];
     let msg = '📋 ВСЕ ДОСТИЖЕНИЯ:\n\n';
-    for (let ach of ACHIEVEMENTS) {                                                                                                      const status = unlocked.includes(ach.id) ? '✅' : '🔒';
+    for (let ach of ACHIEVEMENTS) {
+      const status = unlocked.includes(ach.id) ? '✅' : '🔒';
       msg += `${status} ${ach.name} — ${ach.desc}\n`;
       if (unlocked.includes(ach.id)) {
         msg += `   ✅ ПОЛУЧЕНО! Бонус: +${ach.bonus}%\n`;
       } else {
         msg += `   🔒 Не выполнено\n`;
-      }                                                                                                                                  msg += '\n';
+      }
+      msg += '\n';
     }
     bot.sendMessage(id, msg, achievementKeyboard());
     return;
   }
 
-  // ==================== ДУЭЛЬ (ПРИНЯТИЕ) ====================
+       // ==================== ДУЭЛЬ (ПРИНЯТИЕ) ====================
   if (data.startsWith('duel_accept_')) {
     try {
       console.log('🔥 ДУЭЛЬ: принятие вызова', data);
@@ -1796,31 +1925,35 @@ if (data === 'bj_double') {
       console.log('  challengerId:', challengerId, 'amount:', amount, 'id:', id);
 
       if (isNaN(challengerId) || isNaN(amount)) {
-        await bot.answerCallbackQuery(query.id, { text: '❌ Ошибка данных вызова.', show_alert: true });
+        bot.sendMessage(id, '❌ Ошибка данных вызова.');
         return;
       }
 
-      if (!duelChallenges[challengerId]) {                                                                                                 await bot.answerCallbackQuery(query.id, { text: '❌ Вызов не найден или уже отменён.', show_alert: true });
+      if (!duelChallenges[challengerId]) {
+        bot.sendMessage(id, '❌ Вызов не найден или уже отменён.');
         return;
       }
 
       if (duelChallenges[challengerId].amount !== amount) {
-        await bot.answerCallbackQuery(query.id, { text: '❌ Сумма вызова изменилась.', show_alert: true });
-        delete duelChallenges[challengerId];                                                                                               return;
+        bot.sendMessage(id, '❌ Сумма вызова изменилась.');
+        delete duelChallenges[challengerId];
+        return;
       }
 
       if (challengerId === id) {
-        await bot.answerCallbackQuery(query.id, { text: '❌ Нельзя принять свой вызов.', show_alert: true });
+        bot.sendMessage(id, '❌ Нельзя принять свой вызов.');
         return;
       }
-                                                                                                                                         const challenger = players[challengerId];                                                                                          if (!challenger) {
-        await bot.answerCallbackQuery(query.id, { text: '❌ Игрок не найден.', show_alert: true });
+
+      const challenger = players[challengerId];
+      if (!challenger) {
+        bot.sendMessage(id, '❌ Игрок не найден.');
         delete duelChallenges[challengerId];
         return;
       }
 
       if (challenger.bet !== amount) {
-        await bot.answerCallbackQuery(query.id, { text: '❌ Игрок отменил вызов.', show_alert: true });
+        bot.sendMessage(id, '❌ Игрок отменил вызов.');
         delete duelChallenges[challengerId];
         challenger.bet = 0;
         saveData();
@@ -1831,12 +1964,12 @@ if (data === 'bj_double') {
       const playerBalance = p.demoMode ? safeNumber(p.demoBalance) : safeNumber(p.balance);
 
       if (playerBalance < amount) {
-        await bot.answerCallbackQuery(query.id, { text: `❌ Не хватает. У тебя ${playerBalance}`, show_alert: true });
+        bot.sendMessage(id, `❌ Не хватает. У тебя ${playerBalance}`);
         return;
       }
 
       if (challengerBalance < amount) {
-        await bot.answerCallbackQuery(query.id, { text: '❌ У соперника не хватает средств.', show_alert: true });
+        bot.sendMessage(id, '❌ У соперника не хватает средств.');
         delete duelChallenges[challengerId];
         challenger.bet = 0;
         saveData();
@@ -1851,35 +1984,37 @@ if (data === 'bj_double') {
         p.balance = safeNumber(p.balance) - amount;
       }
 
-          if (challenger.demoMode) {
+      if (challenger.demoMode) {
         challenger.demoBalance = safeNumber(challenger.demoBalance) - amount;
-      } else {                                                                                                                             challenger.balance = safeNumber(challenger.balance) - amount;
+      } else {
+        challenger.balance = safeNumber(challenger.balance) - amount;
       }
 
       const totalPot = amount * 2;
       const comm = Math.floor(totalPot * 0.1);
       bank.commission = safeNumber(bank.commission) + comm;
-      bank.totalStakes = safeNumber(bank.totalStakes) + totalPot;                                                                        const winAmount = totalPot - comm;
+      bank.totalStakes = safeNumber(bank.totalStakes) + totalPot;
+      const winAmount = totalPot - comm;
 
-      await bot.sendMessage(challengerId, `🎲 ТВОЙ БРОСОК!`);
+      bot.sendMessage(challengerId, `🎲 ТВОЙ БРОСОК!`);
       const dice1a = Math.floor(Math.random() * 6) + 1;
       const dice1b = Math.floor(Math.random() * 6) + 1;
       const sum1 = dice1a + dice1b;
       bot.sendDice(challengerId, { emoji: '🎲' }).catch(() => {});
-      await sleep(1500);                                                                                                                 await bot.sendMessage(challengerId, `🎲 ${dice1a}+${dice1b}=${sum1}`);
+      await sleep(1500);
+      bot.sendMessage(challengerId, `🎲 ${dice1a}+${dice1b}=${sum1}`);
 
-      await bot.sendMessage(id, `🎲 ТВОЙ БРОСОК!`);
+      bot.sendMessage(id, `🎲 ТВОЙ БРОСОК!`);
       const dice2a = Math.floor(Math.random() * 6) + 1;
       const dice2b = Math.floor(Math.random() * 6) + 1;
       const sum2 = dice2a + dice2b;
-      bot.sendDice(id, { emoji: '🎲' }).catch(() => {});                                                                                 await sleep(1500);
-      await bot.sendMessage(id, `🎲 ${dice2a}+${dice2b}=${sum2}`);
+      bot.sendDice(id, { emoji: '🎲' }).catch(() => {});
+      await sleep(1500);
+      bot.sendMessage(id, `🎲 ${dice2a}+${dice2b}=${sum2}`);
 
       let winnerId = null;
       if (sum1 > sum2) winnerId = challengerId;
       else if (sum2 > sum1) winnerId = id;
-
-      await bot.answerCallbackQuery(query.id, { text: '⚔ Дуэль завершена!', show_alert: false });
 
       if (winnerId) {
         const loserId = winnerId === challengerId ? id : challengerId;
@@ -1908,7 +2043,7 @@ if (data === 'bj_double') {
         const loserBalance = players[loserId].demoMode ? safeNumber(players[loserId].demoBalance) : safeNumber(players[loserId].balance);
 
         bot.sendMessage(winnerId,
-          `⚔ ДУЭЛЬ: ПОБЕДА!\n\n` +
+          `⚔️ ДУЭЛЬ: ПОБЕДА!\n\n` +
           `Твой бросок: ${winnerId === challengerId ? dice1a : dice2a}+${winnerId === challengerId ? dice1b : dice2b}=${winnerSum}\n` +
           `Соперник: ${winnerId === challengerId ? dice2a : dice1a}+${winnerId === challengerId ? dice2b : dice1b}=${loserSum}\n\n` +
           `💰 Ты выиграл ${winAmount} дублонов!\n` +
@@ -1917,7 +2052,7 @@ if (data === 'bj_double') {
         );
 
         bot.sendMessage(loserId,
-          `⚔ ДУЭЛЬ: ПОРАЖЕНИЕ!\n\n` +
+          `⚔️ ДУЭЛЬ: ПОРАЖЕНИЕ!\n\n` +
           `Твой бросок: ${loserId === challengerId ? dice1a : dice2a}+${loserId === challengerId ? dice1b : dice2b}=${loserSum}\n` +
           `Соперник: ${loserId === challengerId ? dice2a : dice1a}+${loserId === challengerId ? dice2b : dice1b}=${winnerSum}\n\n` +
           `💸 Ты проиграл ${amount} дублонов.\n` +
@@ -1927,9 +2062,10 @@ if (data === 'bj_double') {
       } else {
         const half = Math.floor(winAmount / 2);
 
-      if (players[challengerId].demoMode) {
+        if (players[challengerId].demoMode) {
           players[challengerId].demoBalance = safeNumber(players[challengerId].demoBalance) + half;
-        } else {                                                                                                                             players[challengerId].balance = safeNumber(players[challengerId].balance) + half;
+        } else {
+          players[challengerId].balance = safeNumber(players[challengerId].balance) + half;
         }
 
         if (players[id].demoMode) {
@@ -1947,7 +2083,7 @@ if (data === 'bj_double') {
         const playerBalanceAfter = players[id].demoMode ? safeNumber(players[id].demoBalance) : safeNumber(players[id].balance);
 
         bot.sendMessage(challengerId,
-          `⚔ ДУЭЛЬ: НИЧЬЯ!\n\n` +
+          `⚔️ ДУЭЛЬ: НИЧЬЯ!\n\n` +
           `Твой бросок: ${dice1a}+${dice1b}=${sum1}\n` +
           `Соперник: ${dice2a}+${dice2b}=${sum2}\n\n` +
           `🤝 Каждый получил по ${half} дублонов.\n` +
@@ -1955,8 +2091,8 @@ if (data === 'bj_double') {
           mainInlineKeyboard()
         );
 
-        bot.sendMessage(id,
-          `⚔ ДУЭЛЬ: НИЧЬЯ!\n\n` +
+      bot.sendMessage(id,
+          `⚔️ ДУЭЛЬ: НИЧЬЯ!\n\n` +
           `Твой бросок: ${dice2a}+${dice2b}=${sum2}\n` +
           `Соперник: ${dice1a}+${dice1b}=${sum1}\n\n` +
           `🤝 Каждый получил по ${half} дублонов.\n` +
@@ -1971,12 +2107,13 @@ if (data === 'bj_double') {
 
     } catch (error) {
       console.error('❌ ОШИБКА В ДУЭЛИ:', error);
-      await bot.answerCallbackQuery(query.id, { text: '❌ Ошибка. Попробуйте ещё раз.', show_alert: true });
+      bot.sendMessage(id, '❌ Ошибка. Попробуйте ещё раз.');
       if (p && p.balance !== undefined) {
         if (p.demoMode) {
           p.demoBalance = safeNumber(p.demoBalance) + (amount || 0);
         } else {
-          p.balance = safeNumber(p.balance) + (amount || 0);                                                                               }
+          p.balance = safeNumber(p.balance) + (amount || 0);
+        }
         saveData();
       }
     }
@@ -1986,7 +2123,7 @@ if (data === 'bj_double') {
   // ==================== ОТМЕНА ВЫЗОВА НА ДУЭЛЬ ====================
   if (data === 'duel_cancel') {
     if (!duelChallenges[id]) {
-      bot.answerCallbackQuery(query.id, { text: '❌ У тебя нет активного вызова.' });
+      bot.sendMessage(id, '❌ У тебя нет активного вызова.');
       return;
     }
 
@@ -1998,21 +2135,19 @@ if (data === 'bj_double') {
       saveData();
     }
 
-    bot.answerCallbackQuery(query.id, { text: '✅ Вызов на дуэль отменён!' });
     bot.sendMessage(id, `✅ Ты отменил вызов на дуэль.`, mainInlineKeyboard());
     return;
   }
 
   if (data === 'duel_decline') {
-    bot.answerCallbackQuery(query.id, { text: '❌ Ты отказался от дуэли.' });
     bot.sendMessage(id, `❌ Ты отказался от дуэли.`, mainInlineKeyboard());
     return;
   }
 
   // ==================== ГЛАВНОЕ МЕНЮ ====================
-         if (data === 'menu_play') {
+  if (data === 'menu_play') {
     if (!bank.roundActive) {
-      bot.answerCallbackQuery(query.id, { text: '⏳ Раунд не активен, подожди...' });
+      bot.sendMessage(id, '⏳ Раунд не активен, подожди...');
       return;
     }
     bot.sendMessage(id, '🎲 Выбери режим игры:', gameModeKeyboard());
@@ -2023,7 +2158,7 @@ if (data === 'bj_double') {
     const rank = RANKS[p.rank];
     const balance = p.demoMode ? safeNumber(p.demoBalance) : safeNumber(p.balance);
     bot.sendMessage(id,
-      `🏴☠ ЧЁРНАЯ КОСТЬ\n\n` +
+      `🏴‍☠️ ЧЁРНАЯ КОСТЬ\n\n` +
       `Баланс: ${balance} дуб.\n` +
       `Ранг: ${rank.emoji} ${rank.name} (+${rank.bonus}% к выигрышу)\n` +
       `Доля: ${p.share}% банка\n` +
@@ -2039,7 +2174,8 @@ if (data === 'bj_double') {
     const adminMark = id === ADMIN_ID ? ' 👑 АДМИН' : '';
     const streak = p.dailyStreak || 0;
     const balance = p.demoMode ? safeNumber(p.demoBalance) : safeNumber(p.balance);
-    bot.sendMessage(id,                                                                                                                  `👤 ПИРАТСКИЙ ПАСПОРТ\n\n` +
+    bot.sendMessage(id,
+      `👤 ПИРАТСКИЙ ПАСПОРТ\n\n` +
       `Имя: ${p.username || 'Без имени'}${adminMark}\n` +
       `Ранг: ${RANKS[p.rank].emoji} ${RANKS[p.rank].name} (+${RANKS[p.rank].bonus}% к выигрышу)\n` +
       `Доля в банке: ${p.share}% (доход ${shareIncome} дуб./день)\n` +
@@ -2053,7 +2189,8 @@ if (data === 'bj_double') {
     return;
   }
 
-  if (data === 'profile_balance') {                                                                                                    const balance = p.demoMode ? safeNumber(p.demoBalance) : safeNumber(p.balance);
+  if (data === 'profile_balance') {
+    const balance = p.demoMode ? safeNumber(p.demoBalance) : safeNumber(p.balance);
     bot.sendMessage(id,
       `💰 Основной: ${balance}\n` +
       `🎮 Демо: ${safeNumber(p.demoBalance)} (осталось ${20 - (p.demoRollsToday || 0)} бросков)`,
@@ -2068,7 +2205,6 @@ if (data === 'bj_double') {
 
     if (p.lastDailyDate === today) {
       const left = 24 - Math.floor((now - new Date(today).getTime()) / 3600000);
-      bot.answerCallbackQuery(query.id, { text: `⏳ Бонус уже получен` });
       bot.sendMessage(id, `⏳ Бонус уже получен сегодня. Следующий через ${left} ч.`, profileInlineKeyboard());
       return;
     }
@@ -2090,17 +2226,17 @@ if (data === 'bj_double') {
     else if (streak >= 7) bonus = 25;
     else if (streak >= 3) bonus = 10;
 
-  if (p.demoMode) {
+    if (p.demoMode) {
       p.demoBalance = safeNumber(p.demoBalance) + bonus;
     } else {
       p.balance = safeNumber(p.balance) + bonus;
-    }                                                                                                                                  p.lastDailyDate = today;
+    }
+    p.lastDailyDate = today;
     p.dailyStreak = streak;
     addHistory(id, `Ежедневный бонус: +${bonus} дуб. (серия ${streak} дней)`);
     addBalanceHistory(id, bonus, `Ежедневный бонус (серия ${streak})`);
     saveData();
     const balance = p.demoMode ? safeNumber(p.demoBalance) : safeNumber(p.balance);
-    bot.answerCallbackQuery(query.id, { text: `🎁 +${bonus} дуб.! Серия: ${streak} дней!` });
     bot.sendMessage(id,
       `🎁 Ежедневный бонус: +${bonus} дуб.!\n🔥 Серия: ${streak} дней подряд!\nБаланс: ${balance}`,
       profileInlineKeyboard()
@@ -2108,7 +2244,8 @@ if (data === 'bj_double') {
     return;
   }
 
-  if (data === 'profile_referral') {                                                                                                   const botInfo = await bot.getMe();
+  if (data === 'profile_referral') {
+    const botInfo = await bot.getMe();
     const link = `https://t.me/${botInfo.username}?start=ref_${id}`;
     bot.sendMessage(id,
       `🔗 Твоя реф-ссылка:\n${link}\n\n` +
@@ -2133,7 +2270,7 @@ if (data === 'bj_double') {
       `🎲 Классика:\n` +
       `  Игр: ${s.totalGames}, Побед: ${s.wins} (${winRate}%)\n` +
       `  Лучшая серия: ${s.maxStreak}\n\n` +
-      `⚔ Дуэль:\n` +
+      `⚔️ Дуэль:\n` +
       `  Игр: ${duel.totalGames}, Побед: ${duel.wins} (${duelRate}%)\n\n` +
       `👑 VIP:\n` +
       `  Игр: ${vip.totalGames}, Побед: ${vip.wins} (${vipRate}%)`,
@@ -2142,23 +2279,25 @@ if (data === 'bj_double') {
     return;
   }
 
+       // ==================== ПРОДОЛЖЕНИЕ CALLBACK_QUERY (ПРОФИЛЬ, ВЫВОД, БАНК, ТОП, РАНГИ, ДОЛЯ, СУНДУК, ПОДАРКИ, ДОХОД, ДЕМО, ПОМОЩЬ, ИГРОВЫЕ ДЕЙСТВИЯ) ====================
+
   if (data === 'profile_withdraw') {
     if (p.demoMode) {
-      bot.answerCallbackQuery(query.id, { text: '❌ В демо-режиме вывод недоступен.' });
+      bot.sendMessage(id, '❌ В демо-режиме вывод недоступен.');
       return;
     }
     if (safeNumber(bank.pot) < MIN_BANK) {
-      bot.answerCallbackQuery(query.id, { text: `❌ Банк меньше ${MIN_BANK} дуб. Вывод недоступен.` });
+      bot.sendMessage(id, `❌ Банк меньше ${MIN_BANK} дуб. Вывод недоступен.`);
       return;
     }
     const hasPurchased = safeNumber(p.totalEarned) > 0;
     if (!hasPurchased && p.rank < 2) {
-      bot.answerCallbackQuery(query.id, { text: '❌ Вывод доступен только после покупки дублонов (от 500 дуб.) или ранга Капитан.' });
+      bot.sendMessage(id, '❌ Вывод доступен только после покупки дублонов (от 500 дуб.) или ранга Капитан.');
       return;
     }
     const maxWithdraw = Math.floor(Math.min(safeNumber(p.balance) * MAX_WITHDRAW_PERCENT, MAX_WITHDRAW_DAILY));
     if (maxWithdraw < MIN_WITHDRAW) {
-      bot.answerCallbackQuery(query.id, { text: `❌ Минимальный вывод ${MIN_WITHDRAW} дуб. Доступно ${maxWithdraw} дуб.` });
+      bot.sendMessage(id, `❌ Минимальный вывод ${MIN_WITHDRAW} дуб. Доступно ${maxWithdraw} дуб.`);
       return;
     }
     bot.sendMessage(id,
@@ -2169,9 +2308,10 @@ if (data === 'bj_double') {
     );
     return;
   }
-    if (data === 'profile_withdraw_history') {
+
+  if (data === 'profile_withdraw_history') {
     if (!p.withdrawHistory || p.withdrawHistory.length === 0) {
-      bot.answerCallbackQuery(query.id, { text: '📋 У тебя нет истории выводов.' });
+      bot.sendMessage(id, '📋 У тебя нет истории выводов.');
       return;
     }
     let msg = '📋 ИСТОРИЯ ВЫВОДОВ:\n\n';
@@ -2204,7 +2344,8 @@ if (data === 'bj_double') {
         const balB = b[1].demoMode ? safeNumber(b[1].demoBalance) : safeNumber(b[1].balance);
         return balB - balA;
       })
-      .slice(0, 10);                                                                                                                   let msgText = '🏆 ТОП-10 ПО БАЛАНСУ:\n\n';
+      .slice(0, 10);
+    let msgText = '🏆 ТОП-10 ПО БАЛАНСУ:\n\n';
     sorted.forEach(([id, data], i) => {
       const rank = RANKS[data.rank]?.emoji || '🪵';
       const adminMark = parseInt(id) === ADMIN_ID ? ' 👑' : '';
@@ -2216,9 +2357,10 @@ if (data === 'bj_double') {
   }
 
   if (data === 'menu_rank') {
-    let msg = '🏴☠ ВСЕ РАНГИ ПИРАТОВ:\n\n';
+    let msg = '🏴‍☠️ ВСЕ РАНГИ ПИРАТОВ:\n\n';
     for (let i = 0; i < RANKS.length; i++) {
-      const r = RANKS[i];                                                                                                                const isCurrent = i === p.rank;
+      const r = RANKS[i];
+      const isCurrent = i === p.rank;
       const isUnlocked = i <= p.rank;
       const status = isCurrent ? ' ✅ ТЕКУЩИЙ' : (isUnlocked ? ' ✅ ДОСТУПЕН' : ' 🔒 ЗАКРЫТ');
       msg += `${r.emoji} ${r.name} — ${r.costDublons} дуб.\n`;
@@ -2236,16 +2378,16 @@ if (data === 'bj_double') {
     const rankIdx = parseInt(data.split('_')[1]);
     const r = RANKS[rankIdx];
     if (rankIdx <= p.rank) {
-      bot.answerCallbackQuery(query.id, { text: '❌ У тебя уже есть этот ранг или выше.' });
+      bot.sendMessage(id, '❌ У тебя уже есть этот ранг или выше.');
       return;
     }
     if (rankIdx > p.rank + 1) {
-      bot.answerCallbackQuery(query.id, { text: `❌ Сначала купи предыдущий ранг: ${RANKS[rankIdx-1].emoji} ${RANKS[rankIdx-1].name}` });
+      bot.sendMessage(id, `❌ Сначала купи предыдущий ранг: ${RANKS[rankIdx-1].emoji} ${RANKS[rankIdx-1].name}`);
       return;
     }
     const balance = p.demoMode ? safeNumber(p.demoBalance) : safeNumber(p.balance);
     if (balance < r.costDublons) {
-      bot.answerCallbackQuery(query.id, { text: `❌ Не хватает. Нужно ${r.costDublons} дуб.` });
+      bot.sendMessage(id, `❌ Не хватает. Нужно ${r.costDublons} дуб.`);
       return;
     }
     if (p.demoMode) {
@@ -2257,7 +2399,6 @@ if (data === 'bj_double') {
     addHistory(id, `Купил ранг ${r.name} за ${r.costDublons} дуб.`);
     addBalanceHistory(id, -r.costDublons, `Покупка ранга ${r.name}`);
     saveData();
-    bot.answerCallbackQuery(query.id, { text: `✅ Поздравляю! Ты получил ранг ${r.emoji} ${r.name}!` });
     bot.sendMessage(id, `✅ Поздравляю! Ты получил ранг ${r.emoji} ${r.name}!`, mainInlineKeyboard());
     return;
   }
@@ -2267,8 +2408,8 @@ if (data === 'bj_double') {
       `💳 ПОПОЛНЕНИЕ БАЛАНСА\n\n` +
       `Курс: 1 дублон = 0.5 ₽\n\n` +
       `Переведи нужную сумму на карту:\n` +
-      `❗ 4100 1173 5261 4250\n` +
-      `❗ Юрий Игоревич В.\n\n` +
+      `❗️ 4100 1173 5261 4250\n` +
+      `❗️ Юрий Игоревич В.\n\n` +
       `В назначении укажи: ПОПОЛНЕНИЕ + ${id}\n` +
       `После перевода напиши админу в ЛС: @magistryu\n` +
       `Баланс будет пополнен в течение 24 часов.`,
@@ -2283,7 +2424,8 @@ if (data === 'bj_double') {
       `📈 ТВОЯ ДОЛЯ В БАНКЕ: ${p.share}%\n` +
       `Доход от доли: ${shareIncome} дуб./день\n\n` +
       `Купи долю в банке за РЕАЛЬНЫЕ ДЕНЬГИ и получай пассивный доход!\n` +
-      `Доля даёт % от всех ставок в банке.\n\n` +                                                                                        `Доступные доли:`,
+      `Доля даёт % от всех ставок в банке.\n\n` +
+      `Доступные доли:`,
       shareInlineKeyboard()
     );
     return;
@@ -2297,7 +2439,8 @@ if (data === 'bj_double') {
       `💳 ПОКУПКА ДОЛИ ${share.percent}%\n\n` +
       `Стоимость: ${share.costRub} ₽\n\n` +
       `Переведи на карту:\n` +
-      `❗ 4100 1173 5261 4250\n` +                                                                                                       `❗ Юрий Игоревич В.\n\n` +
+      `❗️ 4100 1173 5261 4250\n` +
+      `❗️ Юрий Игоревич В.\n\n` +
       `В назначении укажи: ДОЛЯ ${share.percent}% + ${id}\n` +
       `После оплаты напиши админу: @magistryu\n` +
       `Доля будет активирована в течение 24 часов.`,
@@ -2308,12 +2451,12 @@ if (data === 'bj_double') {
 
   if (data === 'share_sell') {
     if (p.share <= 0) {
-      bot.answerCallbackQuery(query.id, { text: '❌ У тебя нет доли для продажи.' });
+      bot.sendMessage(id, '❌ У тебя нет доли для продажи.');
       return;
     }
     const shareObj = SHARES.find(s => s.percent === p.share);
     if (!shareObj) {
-      bot.answerCallbackQuery(query.id, { text: '❌ Не удалось найти стоимость доли.' });
+      bot.sendMessage(id, '❌ Не удалось найти стоимость доли.');
       return;
     }
     const sellPrice = Math.floor(shareObj.costRub * 0.7);
@@ -2327,25 +2470,24 @@ if (data === 'bj_double') {
     addHistory(id, `Продал долю ${soldShare}% за ${sellPrice} дуб.`);
     addBalanceHistory(id, sellPrice, `Продажа доли ${soldShare}%`);
     saveData();
-    bot.answerCallbackQuery(query.id, { text: `✅ Ты продал долю ${soldShare}% за ${sellPrice} дуб.` });
     bot.sendMessage(id, `✅ Ты продал долю ${soldShare}% за ${sellPrice} дуб.`, mainInlineKeyboard());
     return;
   }
 
-  // ==================== ПОДПОЛЬНАЯ ЛАВКА (СУНДУК 2.0) ====================
+         // ==================== ПОДПОЛЬНАЯ ЛАВКА (СУНДУК 2.0) ====================
   if (data === 'menu_sunduk') {
     if (p.rank < 2) {
-      bot.answerCallbackQuery(query.id, { text: '❌ Сундук доступен только с ранга Капитан (или выше).' });
+      bot.sendMessage(id, '❌ Сундук доступен только с ранга Капитан (или выше).');
       return;
     }
 
-      if (!sundukStats[id]) sundukStats[id] = { opened: 0, wins: 0, bestWin: 0, streak: 0 };
+    if (!sundukStats[id]) sundukStats[id] = { opened: 0, wins: 0, bestWin: 0, streak: 0 };
 
     const today = new Date().toDateString();
     const freeAvailable = freeSundukUsed[id] !== today;
 
     bot.sendMessage(id,
-      `⚔ ПОДПОЛЬНАЯ ЛАВКА\n\n` +
+      `⚔️ ПОДПОЛЬНАЯ ЛАВКА\n\n` +
       `💰 Выбери уровень риска:\n\n` +
       `🟢 Низкий — риск 10% (50-200 дуб.)\n` +
       `🟡 Средний — риск 30% (200-1000 дуб.)\n` +
@@ -2353,7 +2495,8 @@ if (data === 'bj_double') {
       `⚫ Экстремальный — риск 90% (5000-25000 дуб.)\n\n` +
       `🎁 ${freeAvailable ? '✅ Доступен бесплатный сундук (1 раз в день)!' : '⏳ Бесплатный сундук уже использован'}\n\n` +
       `📊 Твоя статистика: ${sundukStats[id].opened} открытий, ${sundukStats[id].wins} побед`,
-      sundukInlineKeyboard()                                                                                                           );
+      sundukInlineKeyboard()
+    );
     return;
   }
 
@@ -2364,13 +2507,13 @@ if (data === 'bj_double') {
 
     const balance = p.demoMode ? safeNumber(p.demoBalance) : safeNumber(p.balance);
     if (balance < level.minCost) {
-      bot.answerCallbackQuery(query.id, { text: `❌ Минимальная цена для этого уровня ${level.minCost} дуб.` });
+      bot.sendMessage(id, `❌ Минимальная цена для этого уровня ${level.minCost} дуб.`);
       return;
     }
 
     const cost = Math.floor(Math.random() * (level.maxCost - level.minCost + 1)) + level.minCost;
     if (balance < cost) {
-      bot.answerCallbackQuery(query.id, { text: `❌ Не хватает. Нужно ${cost} дуб.` });
+      bot.sendMessage(id, `❌ Не хватает. Нужно ${cost} дуб.`);
       return;
     }
 
@@ -2425,7 +2568,7 @@ if (data === 'bj_double') {
           if (players[pid].balance > 0 || players[pid].demoBalance > 0) {
             bot.sendMessage(pid,
               `🎰 ${emoji} ИГРОК @${p.username || id} ВЫИГРАЛ ${reward} ДУБ. В ПОДПОЛЬНОЙ ЛАВКЕ!`
-                            ).catch(() => {});
+            ).catch(() => {});
           }
         }
       }
@@ -2463,7 +2606,8 @@ if (data === 'bj_double') {
     saveData();
 
     const balanceAfter = p.demoMode ? safeNumber(p.demoBalance) : safeNumber(p.balance);
-    bot.sendMessage(id,                                                                                                                  `⚔ ПОДПОЛЬНАЯ ЛАВКА\n\n` +
+    bot.sendMessage(id,
+      `⚔️ ПОДПОЛЬНАЯ ЛАВКА\n\n` +
       `💰 Уровень: ${level.name}\n` +
       `💸 Снято: ${cost} дуб.\n` +
       `${resultText}\n` +
@@ -2478,7 +2622,7 @@ if (data === 'bj_double') {
   if (data === 'sunduk_free') {
     const today = new Date().toDateString();
     if (freeSundukUsed[id] === today) {
-      bot.answerCallbackQuery(query.id, { text: '❌ Ты уже использовал бесплатный сундук сегодня.' });
+      bot.sendMessage(id, '❌ Ты уже использовал бесплатный сундук сегодня.');
       return;
     }
 
@@ -2512,22 +2656,22 @@ if (data === 'bj_double') {
     );
     return;
   }
-  
+
   if (data === 'sunduk_stats') {
     const stats = sundukStats[id] || { opened: 0, wins: 0, bestWin: 0, streak: 0 };
     const winRate = stats.opened > 0 ? Math.round((stats.wins / stats.opened) * 100) : 0;
     bot.sendMessage(id,
       `📊 МОЯ СТАТИСТИКА В ПОДПОЛЬНОЙ ЛАВКЕ:\n\n` +
       `📦 Открыто сундуков: ${stats.opened}\n` +
-      `🏆 Побед: ${stats.wins}\n` +                                                                                                      `📈 Процент побед: ${winRate}%\n` +
+      `🏆 Побед: ${stats.wins}\n` +
+      `📈 Процент побед: ${winRate}%\n` +
       `💰 Лучший выигрыш: ${stats.bestWin || 0} дуб.\n` +
       `🔥 Текущая серия: ${stats.streak || 0}`,
       mainInlineKeyboard()
     );
     return;
-  }
-
-  // ==================== ПОДАРКИ ====================
+                    }
+   // ==================== ПОДАРКИ ====================
   if (data === 'menu_gifts') {
     bot.sendMessage(id, `💝 ПОДАРКИ\n\nВыбери действие:`, giftKeyboard());
     return;
@@ -2536,7 +2680,7 @@ if (data === 'bj_double') {
   if (data === 'gift_send') {
     const balance = p.demoMode ? safeNumber(p.demoBalance) : safeNumber(p.balance);
     if (balance < 10) {
-      bot.answerCallbackQuery(query.id, { text: '❌ Минимальный подарок 10 дуб.' });
+      bot.sendMessage(id, '❌ Минимальный подарок 10 дуб.');
       return;
     }
     adminState[id] = { action: 'gift_send' };
@@ -2590,7 +2734,7 @@ if (data === 'bj_double') {
 
   if (data === 'collect_take') {
     if (safeNumber(p.passiveCollected) <= 0) {
-      bot.answerCallbackQuery(query.id, { text: '❌ Нет дохода для сбора.' });
+      bot.sendMessage(id, '❌ Нет дохода для сбора.');
       return;
     }
     if (p.demoMode) {
@@ -2603,7 +2747,6 @@ if (data === 'bj_double') {
     addBalanceHistory(id, safeNumber(p.passiveCollected), 'Сбор пассивного дохода');
     p.passiveCollected = 0;
     saveData();
-    bot.answerCallbackQuery(query.id, { text: `💰 Ты собрал доход!` });
     const balance = p.demoMode ? safeNumber(p.demoBalance) : safeNumber(p.balance);
     bot.sendMessage(id, `💰 Ты собрал доход! Баланс: ${balance} дуб.`, mainInlineKeyboard());
     return;
@@ -2632,16 +2775,17 @@ if (data === 'bj_double') {
   // ==================== ПОМОЩЬ ====================
   if (data === 'menu_help') {
     bot.sendMessage(id,
-      `🏴☠ ДОБРО ПОЖАЛОВАТЬ В ЧЁРНУЮ КОСТЬ!\n\n` +                                                                                       `Это пиратская игра на дублоны. Зарабатывай, повышай ранг, покупай долю в банке и выводи деньги!\n\n` +
+      `🏴‍☠️ ДОБРО ПОЖАЛОВАТЬ В ЧЁРНУЮ КОСТЬ!\n\n` +
+      `Это пиратская игра на дублоны. Зарабатывай, повышай ранг, покупай долю в банке и выводи деньги!\n\n` +
       `📖 КАК ИГРАТЬ:\n` +
       `1. Нажми «🎰 Играть» и выбери режим:\n` +
       `   • 🎲 Классика — бросок против банка\n` +
-      `   • ⚔ Дуэль — против другого игрока\n` +
+      `   • ⚔️ Дуэль — против другого игрока\n` +
       `   • 👑 VIP — против админа (только за деньги)\n` +
       `   • 🎴 Блэкджек — против дилера (карты)\n` +
       `2. Введи сумму ставки и нажми «Бросить»\n` +
       `3. Если выпала точка — можешь удвоить или забрать\n\n` +
-      `🏴☠ КАК ЗАРАБОТАТЬ:\n` +
+      `🏴‍☠️ КАК ЗАРАБОТАТЬ:\n` +
       `• Повышай ранг → получаешь пассивный доход\n` +
       `• Покупай долю в банке → доход от всех ставок\n` +
       `• Забирай ежедневный бонус\n` +
@@ -2654,7 +2798,7 @@ if (data === 'bj_double') {
       `• Дуэль выгоднее, чем Классика (комиссия 10% против 25%)\n` +
       `• Доля в банке окупается через 2-3 недели\n` +
       `• Блэкджек — лучший способ быстро заработать, но риск выше\n\n` +
-      `⚔ ПОЧЕМУ ДУЭЛЬ ЛУЧШЕ:\n` +
+      `⚔️ ПОЧЕМУ ДУЭЛЬ ЛУЧШЕ:\n` +
       `• Комиссия всего 10% (против 25% в Классике)\n` +
       `• Ты играешь против реального игрока, а не против банка\n` +
       `• Можно играть на реальные деньги\n` +
@@ -2663,7 +2807,7 @@ if (data === 'bj_double') {
       `• Купи корабль → получай доход каждый час\n` +
       `• Улучшай корабли → доход растёт\n` +
       `• 20 кораблей от 5000 до 50 000 000 дуб.\n\n` +
-      `⚔ ТУРНИРЫ:\n` +
+      `⚔️ ТУРНИРЫ:\n` +
       `• Каждое воскресенье\n` +
       `• Вход 2000 дуб.\n` +
       `• Призовой фонд: 70% игрокам, 30% админу\n` +
@@ -2684,28 +2828,30 @@ if (data === 'bj_double') {
     const amount = parseInt(data.split('_')[1]);
     if (isNaN(amount)) return;
     if (p.demoMode) {
-      bot.answerCallbackQuery(query.id, { text: '❌ В демо-режиме вывод недоступен.' });
+      bot.sendMessage(id, '❌ В демо-режиме вывод недоступен.');
       return;
     }
     if (safeNumber(p.balance) < amount) {
-      bot.answerCallbackQuery(query.id, { text: `❌ Не хватает. У тебя ${safeNumber(p.balance)} дуб.` });                                return;
+      bot.sendMessage(id, `❌ Не хватает. У тебя ${safeNumber(p.balance)} дуб.`);
+      return;
     }
     const maxWithdraw = Math.floor(Math.min(safeNumber(p.balance) * MAX_WITHDRAW_PERCENT, MAX_WITHDRAW_DAILY));
     if (amount > maxWithdraw) {
-      bot.answerCallbackQuery(query.id, { text: `❌ Можно вывести не более ${maxWithdraw} дуб.` });                                      return;
+      bot.sendMessage(id, `❌ Можно вывести не более ${maxWithdraw} дуб.`);
+      return;
     }
 
     const withdrawFee = Math.floor(amount * 0.1);
     const finalAmount = amount - withdrawFee;
     if (finalAmount < 1) {
-      bot.answerCallbackQuery(query.id, { text: '❌ Сумма слишком мала после комиссии.' });
+      bot.sendMessage(id, '❌ Сумма слишком мала после комиссии.');
       return;
     }
 
-    const today = new Date().toDateString();
+  const today = new Date().toDateString();
     if (p.withdrawDate !== today) { p.withdrawToday = 0; p.withdrawDate = today; }
     if ((p.withdrawToday || 0) + amount > MAX_WITHDRAW_DAILY) {
-      bot.answerCallbackQuery(query.id, { text: `❌ Лимит ${MAX_WITHDRAW_DAILY} дуб./сутки. Осталось: ${MAX_WITHDRAW_DAILY - (p.withdrawToday || 0)}` });
+      bot.sendMessage(id, `❌ Лимит ${MAX_WITHDRAW_DAILY} дуб./сутки. Осталось: ${MAX_WITHDRAW_DAILY - (p.withdrawToday || 0)}`);
       return;
     }
     p.balance = safeNumber(p.balance) - amount;
@@ -2717,7 +2863,6 @@ if (data === 'bj_double') {
     addHistory(id, `Запрос вывода ${finalAmount} (комиссия ${withdrawFee})`);
     addBalanceHistory(id, -amount, `Запрос вывода ${finalAmount} (комиссия ${withdrawFee})`);
     saveData();
-    bot.answerCallbackQuery(query.id, { text: `✅ Запрос на ${finalAmount} дуб. принят!` });
     bot.sendMessage(id,
       `✅ Запрос на ${finalAmount} дублонов принят (комиссия ${withdrawFee} дуб.).\nОжидай подтверждения.`,
       mainInlineKeyboard()
@@ -2728,7 +2873,8 @@ if (data === 'bj_double') {
 
   // ==================== РЕЖИМЫ ИГРЫ ====================
   if (data === 'mode_classic') {
-    p.currentMode = '🎲 Классика';                                                                                                     saveData();
+    p.currentMode = '🎲 Классика';
+    saveData();
     bot.sendMessage(id,
       `🎲 Выбран режим: Классика\nВведи сумму ставки (минимум 1 дублон):`,
       gameActionsKeyboard()
@@ -2737,10 +2883,10 @@ if (data === 'bj_double') {
   }
 
   if (data === 'mode_duel') {
-    p.currentMode = '⚔ Дуэль';
+    p.currentMode = '⚔️ Дуэль';
     saveData();
     bot.sendMessage(id,
-      `⚔ Выбери валюту для дуэли:`,
+      `⚔️ Выбери валюту для дуэли:`,
       duelCurrencyKeyboard()
     );
     return;
@@ -2749,7 +2895,7 @@ if (data === 'bj_double') {
   if (data === 'mode_vip') {
     const balance = p.demoMode ? safeNumber(p.demoBalance) : safeNumber(p.balance);
     if (balance < MIN_VIP_BET) {
-      bot.answerCallbackQuery(query.id, { text: `❌ Для VIP нужно минимум ${MIN_VIP_BET} дуб.` });
+      bot.sendMessage(id, `❌ Для VIP нужно минимум ${MIN_VIP_BET} дуб.`);
       return;
     }
     p.currentMode = '👑 VIP-игра';
@@ -2759,15 +2905,14 @@ if (data === 'bj_double') {
       gameActionsKeyboard()
     );
     return;
-  }
-
+                            }
   if (data === 'duel_currency_dublons' || data === 'duel_currency_money') {
     p.duelCurrency = data === 'duel_currency_dublons' ? '💵 Дублоны' : '💰 Реальные деньги';
     saveData();
     const currencyName = p.duelCurrency === '💵 Дублоны' ? 'дублоны' : 'реальные деньги (₽)';
     bot.sendMessage(id,
-      `⚔ Валюта: ${p.duelCurrency}\nВведи сумму ставки (минимум 1 ${currencyName === 'дублоны' ? 'дублон' : '₽'}):`,
-                    gameActionsKeyboard()
+      `⚔️ Валюта: ${p.duelCurrency}\nВведи сумму ставки (минимум 1 ${currencyName === 'дублоны' ? 'дублон' : '₽'}):`,
+      gameActionsKeyboard()
     );
     return;
   }
@@ -2775,7 +2920,8 @@ if (data === 'bj_double') {
   // ==================== ИГРОВЫЕ ДЕЙСТВИЯ ====================
   if (data === 'game_roll') {
     try {
-      const fakeMsg = { chat: { id: id }, text: '🎲 Бросить', from: { id: id } };                                                        bot.emit('message', fakeMsg);
+      const fakeMsg = { chat: { id: id }, text: '🎲 Бросить', from: { id: id } };
+      bot.emit('message', fakeMsg);
     } catch (e) {
       console.error('❌ Ошибка при эмуляции броска:', e);
       bot.sendMessage(id, '❌ Произошла ошибка. Попробуй ещё раз.', mainInlineKeyboard());
@@ -2785,19 +2931,21 @@ if (data === 'bj_double') {
 
   if (data === 'game_double') {
     if (p.currentMode !== '🎲 Классика') {
-      bot.answerCallbackQuery(query.id, { text: '❌ Удвоение только в режиме Классика.' });
+      bot.sendMessage(id, '❌ Удвоение только в режиме Классика.');
       return;
     }
     if (!p.canDouble || p.bet <= 0) {
-      bot.answerCallbackQuery(query.id, { text: '❌ Нет активной точки.' });
+      bot.sendMessage(id, '❌ Нет активной точки.');
       return;
     }
     const balance = p.demoMode ? safeNumber(p.demoBalance) : safeNumber(p.balance);
-    if (balance < p.bet) {                                                                                                               bot.answerCallbackQuery(query.id, { text: `❌ Не хватает. Нужно ${p.bet}` });
+    if (balance < p.bet) {
+      bot.sendMessage(id, `❌ Не хватает. Нужно ${p.bet}`);
       return;
     }
     if (p.demoMode) {
-      p.demoBalance = safeNumber(p.demoBalance) - p.bet;                                                                               } else {
+      p.demoBalance = safeNumber(p.demoBalance) - p.bet;
+    } else {
       p.balance = safeNumber(p.balance) - p.bet;
     }
     const oldBet = p.bet;
@@ -2810,13 +2958,13 @@ if (data === 'bj_double') {
     addHistory(id, `Удвоение до ${p.bet}`);
     addBalanceHistory(id, -oldBet, `Удвоение ставки до ${p.bet}`);
     saveData();
-    bot.answerCallbackQuery(query.id, { text: `⚡ Ставка удвоена до ${p.bet}` });                                                      bot.sendMessage(id, `⚡ Ставка УДВОЕНА до ${p.bet}. Нажми 🎲 Бросить`, gameActionsKeyboard());
+    bot.sendMessage(id, `⚡ Ставка УДВОЕНА до ${p.bet}. Нажми 🎲 Бросить`, gameActionsKeyboard());
     return;
   }
 
   if (data === 'game_take') {
     if (!p.canDouble || p.bet <= 0) {
-      bot.answerCallbackQuery(query.id, { text: '❌ Нет активной точки.' });
+      bot.sendMessage(id, '❌ Нет активной точки.');
       return;
     }
     const takenBet = p.bet;
@@ -2832,7 +2980,6 @@ if (data === 'bj_double') {
     addHistory(id, `Забрал ставку ${takenBet}`);
     addBalanceHistory(id, takenBet, 'Забрал ставку при точке');
     saveData();
-    bot.answerCallbackQuery(query.id, { text: `💰 Ты забрал ${takenBet} дуб.` });
     const balance = p.demoMode ? safeNumber(p.demoBalance) : safeNumber(p.balance);
     bot.sendMessage(id, `✅ Забрал ставку ${takenBet} дуб. Баланс: ${balance}`, mainInlineKeyboard());
     return;
@@ -2850,14 +2997,14 @@ bot.on('message', async (msg) => {
   if (isFlood(id)) return;
 
   const p = getPlayer(id);
-    if (!p) return;
+  if (!p) return;
 
-// Проверка, был ли пользователь активен в последние 10 минут                                                                      const lastActivity = p.lastActivity || 0;
-if (Date.now() - lastActivity > 600000) {
-  // Если пользователь не активен более 10 минут — отправляем приветствие
-  bot.sendMessage(id, '🏴☠ Добро пожаловать обратно!');
-}
-p.lastActivity = Date.now();
+  // ===== ПРОВЕРКА АКТИВНОСТИ ПОЛЬЗОВАТЕЛЯ =====
+  const lastActivity = p.lastActivity || 0;
+  if (Date.now() - lastActivity > 600000) {
+    bot.sendMessage(id, '🏴‍☠️ Добро пожаловать обратно!');
+  }
+  p.lastActivity = Date.now();
 
   // ===== ПРОВЕРКА ТЕХНИЧЕСКИХ РАБОТ =====
   if (isMaintenanceActive()) {
@@ -2865,7 +3012,8 @@ p.lastActivity = Date.now();
     return bot.sendMessage(id,
       `🔧 БОТ НА ТЕХНИЧЕСКИХ РАБОТАХ\n\n` +
       `${maintenanceMessage}\n` +
-      `⏳ Осталось примерно: ${timeLeft} минут\n` +                                                                                      `Приносим извинения за неудобства! 🙏`
+      `⏳ Осталось примерно: ${timeLeft} минут\n` +
+      `Приносим извинения за неудобства! 🙏`
     );
   }
 
@@ -2883,7 +3031,8 @@ p.lastActivity = Date.now();
     const hours = Math.floor((now - p.lastPassiveTime) / 3600000);
     const rankBonus = rank.passive * hours;
     const shareBonus = Math.floor((safeNumber(bank.totalStakes) * (p.share / 100)) / 24) * hours;
-    const totalBonus = rankBonus + shareBonus;                                                                                         if (totalBonus > 0) {
+    const totalBonus = rankBonus + shareBonus;
+    if (totalBonus > 0) {
       p.passiveCollected = safeNumber(p.passiveCollected) + totalBonus;
       p.lastPassiveTime += hours * 3600000;
       saveData();
@@ -2901,7 +3050,8 @@ p.lastActivity = Date.now();
         bot.sendMessage(id, '❌ Неверный номер.');
         delete adminState[id];
         return;
-      }                                                                                                                                  const q = withdrawQueue.splice(idx, 1)[0];
+      }
+      const q = withdrawQueue.splice(idx, 1)[0];
       if (players[q.id] && players[q.id].withdrawHistory) {
         const history = players[q.id].withdrawHistory.find(w => w.amount === q.amount && w.status === 'ожидание');
         if (history) history.status = 'выполнен';
@@ -2935,7 +3085,8 @@ p.lastActivity = Date.now();
       saveData();
       bot.sendMessage(id, `✅ Начислено ${amount} дуб. игроку ${targetId}`);
       bot.sendMessage(targetId, `👑 Админ начислил тебе ${amount} дуб.`);
-      delete adminState[id];                                                                                                             return;
+      delete adminState[id];
+      return;
     }
 
     if (state.action === 'history') {
@@ -2945,18 +3096,21 @@ p.lastActivity = Date.now();
         delete adminState[id];
         return;
       }
-      const target = players[targetId];                                                                                                  let msgText = `📋 ИСТОРИЯ ИГРОКА ${targetId}:\n\n`;
+      const target = players[targetId];
+      let msgText = `📋 ИСТОРИЯ ИГРОКА ${targetId}:\n\n`;
       const balance = target.demoMode ? safeNumber(target.demoBalance) : safeNumber(target.balance);
       msgText += `Баланс: ${balance} дуб.\n`;
       msgText += `Ранг: ${RANKS[target.rank].name}\n`;
       msgText += `Доля: ${target.share}%\n\n`;
       msgText += `📜 Последние действия:\n`;
       if (target.history && target.history.length > 0) {
-        target.history.slice(-10).forEach(h => {                                                                                             msgText += `- ${new Date(h.time).toLocaleTimeString()} ${h.text}\n`;
+        target.history.slice(-10).forEach(h => {
+          msgText += `- ${new Date(h.time).toLocaleTimeString()} ${h.text}\n`;
         });
       } else {
         msgText += 'Нет истории.\n';
-      }                                                                                                                                  msgText += `\n📊 Динамика баланса (7 дней):\n`;
+      }
+      msgText += `\n📊 Динамика баланса (7 дней):\n`;
       if (target.balanceHistory && target.balanceHistory.length > 0) {
         target.balanceHistory.slice(-7).forEach(b => {
           msgText += `- ${new Date(b.time).toLocaleDateString()}: ${b.reason} → ${safeNumber(b.balance)} дуб.\n`;
@@ -2969,7 +3123,8 @@ p.lastActivity = Date.now();
       return;
     }
 
-    if (state.action === 'sunduk') {                                                                                                     const targetId = parseInt(input);
+    if (state.action === 'sunduk') {
+      const targetId = parseInt(input);
       if (isNaN(targetId) || !players[targetId]) {
         bot.sendMessage(id, '❌ Игрок не найден.');
         delete adminState[id];
@@ -3005,7 +3160,7 @@ p.lastActivity = Date.now();
         addHistory(targetId, `СУНДУК: ПОБЕДА! +${winAmount} дуб.`);
         addBalanceHistory(targetId, winAmount, 'Сундук: победа');
         bot.sendMessage(targetId,
-          `⚔ СУНДУК: ПОБЕДА!\n` +
+          `⚔️ СУНДУК: ПОБЕДА!\n` +
           `Ты: ${playerDice1}+${playerDice2}=${playerSum}\n` +
           `Капитан: ${adminDice1}+${adminDice2}=${adminSum}\n` +
           `Ты забираешь ${winAmount} дуб. из банка!`
@@ -3015,7 +3170,7 @@ p.lastActivity = Date.now();
         addHistory(targetId, `СУНДУК: поражение (-500 дуб.)`);
         addBalanceHistory(targetId, -500, 'Сундук: поражение');
         bot.sendMessage(targetId,
-          `⚔ СУНДУК: ПОРАЖЕНИЕ!\n` +
+          `⚔️ СУНДУК: ПОРАЖЕНИЕ!\n` +
           `Ты: ${playerDice1}+${playerDice2}=${playerSum}\n` +
           `Капитан: ${adminDice1}+${adminDice2}=${adminSum}\n` +
           `Твой взнос 500 дуб. ушёл в банк.`
@@ -3024,14 +3179,17 @@ p.lastActivity = Date.now();
       }
       saveData();
       delete adminState[id];
-      return;                                                                                                                          }
-    if (state.action === 'share_activate') {
+      return;
+    }
+
+  if (state.action === 'share_activate') {
       const parts = input.split(' ');
       if (parts.length < 2) return bot.sendMessage(id, '❌ Формат: ID процент');
       const targetId = parseInt(parts[0]);
       const percent = parseInt(parts[1]);
       if (isNaN(targetId) || isNaN(percent)) return bot.sendMessage(id, '❌ Неверный формат.');
-      if (!players[targetId]) {                                                                                                            bot.sendMessage(id, '❌ Игрок не найден.');
+      if (!players[targetId]) {
+        bot.sendMessage(id, '❌ Игрок не найден.');
         delete adminState[id];
         return;
       }
@@ -3041,7 +3199,8 @@ p.lastActivity = Date.now();
       addHistory(targetId, `Админ активировал долю ${percent}%`);
       saveData();
       bot.sendMessage(id, `✅ Доля ${percent}% активирована для игрока ${targetId}`);
-      bot.sendMessage(targetId, `👑 Админ активировал твою долю ${percent}% в банке!`);                                                  delete adminState[id];
+      bot.sendMessage(targetId, `👑 Админ активировал твою долю ${percent}% в банке!`);
+      delete adminState[id];
       return;
     }
 
@@ -3051,14 +3210,16 @@ p.lastActivity = Date.now();
         bot.sendMessage(id, '❌ Игрок не найден.');
         delete adminState[id];
         return;
-      }                                                                                                                                  blockList[targetId] = Date.now() + 86400000;
+      }
+      blockList[targetId] = Date.now() + 86400000;
       bot.sendMessage(id, `⛔ Игрок ${targetId} заблокирован на 24 часа.`);
       bot.sendMessage(targetId, `⛔ Ты заблокирован админом на 24 часа.`);
       delete adminState[id];
       return;
     }
 
-    if (state.action === 'unban') {                                                                                                      const targetId = parseInt(input);
+    if (state.action === 'unban') {
+      const targetId = parseInt(input);
       if (isNaN(targetId)) return bot.sendMessage(id, '❌ Неверный ID.');
       delete blockList[targetId];
       bot.sendMessage(id, `🔓 Игрок ${targetId} разблокирован.`);
@@ -3103,17 +3264,19 @@ p.lastActivity = Date.now();
         bot.sendMessage(id, '❌ Введи ID корабля (число) или напиши "отмена" для отмены.');
         return;
       }
-      const shipData = p.fleet?.ships?.find(s => s.id === shipId);                                                                       if (!shipData) {
+      const shipData = p.fleet?.ships?.find(s => s.id === shipId);
+      if (!shipData) {
         bot.sendMessage(id, '❌ У тебя нет такого корабля.');
         return;
       }
       const ship = SHIPS.find(s => s.id === shipId);
       if (!ship) {
         bot.sendMessage(id, '❌ Корабль не найден.');
-        return;                                                                                                                          }
-      if (upgradeShip(id, shipId)) {                                                                                                       const balance = p.demoMode ? safeNumber(p.demoBalance) : safeNumber(p.balance);
-        bot.sendMessage(id, `✅ Корабль "${ship.name}" улучшен до ${shipData.level} уровня! Баланс: ${balance} дуб.`, fleetKeyboard
-());
+        return;
+      }
+      if (upgradeShip(id, shipId)) {
+        const balance = p.demoMode ? safeNumber(p.demoBalance) : safeNumber(p.balance);
+        bot.sendMessage(id, `✅ Корабль "${ship.name}" улучшен до ${shipData.level} уровня! Баланс: ${balance} дуб.`, fleetKeyboard());
       } else {
         bot.sendMessage(id, `❌ Не удалось улучшить корабль. Проверь баланс и уровень.`, fleetKeyboard());
       }
@@ -3134,7 +3297,8 @@ p.lastActivity = Date.now();
     if (state.action === 'gift_send') {
       const parts = input.split(' ');
       if (parts.length < 2) {
-        bot.sendMessage(id, '❌ Формат: <ID игрока> <сумма>');                                                                             delete adminState[id];
+        bot.sendMessage(id, '❌ Формат: <ID игрока> <сумма>');
+        delete adminState[id];
         return;
       }
       const targetId = parseInt(parts[0]);
@@ -3175,7 +3339,7 @@ p.lastActivity = Date.now();
         target.balance = safeNumber(target.balance) + amount;
       }
 
-    if (!p.giftHistory) p.giftHistory = [];
+      if (!p.giftHistory) p.giftHistory = [];
       if (!target.giftHistory) target.giftHistory = [];
       p.giftHistory.push({ type: 'sent', amount, id: targetId, username: target.username || targetId, date: Date.now() });
       target.giftHistory.push({ type: 'received', amount, id: id, username: p.username || id, date: Date.now() });
@@ -3189,18 +3353,20 @@ p.lastActivity = Date.now();
 
       saveData();
 
-      bot.sendMessage(id, `✅ Подарок ${amount} дуб. отправлен @${target.username || targetId}! Комиссия: ${Math.floor(amount * 0.05)} дуб.`);                                                                                                                              bot.sendMessage(targetId, `🎁 Ты получил подарок ${amount} дуб. от @${p.username || id}!`);
+      bot.sendMessage(id, `✅ Подарок ${amount} дуб. отправлен @${target.username || targetId}! Комиссия: ${Math.floor(amount * 0.05)} дуб.`);
+      bot.sendMessage(targetId, `🎁 Ты получил подарок ${amount} дуб. от @${p.username || id}!`);
       delete adminState[id];
       return;
     }
 
-    if (state.action === 'invest_new') {
+  if (state.action === 'invest_new') {
       const parts = input.split(' ');
       if (parts.length < 2) {
         bot.sendMessage(id, '❌ Формат: <сумма> <дни>');
         delete adminState[id];
         return;
-      }                                                                                                                                  const amount = parseInt(parts[0]);
+      }
+      const amount = parseInt(parts[0]);
       const days = parseInt(parts[1]);
       if (isNaN(amount) || isNaN(days) || amount < INVESTMENT_CONFIG.minAmount || amount > INVESTMENT_CONFIG.maxAmount) {
         bot.sendMessage(id, `❌ Неверный формат. Сумма от ${INVESTMENT_CONFIG.minAmount} до ${INVESTMENT_CONFIG.maxAmount} дуб.`);
@@ -3210,7 +3376,9 @@ p.lastActivity = Date.now();
       if (days < INVESTMENT_CONFIG.minDays || days > INVESTMENT_CONFIG.maxDays) {
         bot.sendMessage(id, `❌ Срок от ${INVESTMENT_CONFIG.minDays} до ${INVESTMENT_CONFIG.maxDays} дней.`);
         delete adminState[id];
-        return;                                                                                                                          }                                                                                                                                  const balance = p.demoMode ? safeNumber(p.demoBalance) : safeNumber(p.balance);
+        return;
+      }
+      const balance = p.demoMode ? safeNumber(p.demoBalance) : safeNumber(p.balance);
       if (balance < amount) {
         bot.sendMessage(id, `❌ Не хватает. У тебя ${balance} дуб.`);
         delete adminState[id];
@@ -3218,7 +3386,8 @@ p.lastActivity = Date.now();
       }
 
       if (p.demoMode) {
-        p.demoBalance = safeNumber(p.demoBalance) - amount;                                                                              } else {
+        p.demoBalance = safeNumber(p.demoBalance) - amount;
+      } else {
         p.balance = safeNumber(p.balance) - amount;
       }
 
@@ -3264,15 +3433,17 @@ p.lastActivity = Date.now();
       const earned = Math.floor(inv.amount * (INVESTMENT_CONFIG.percentPerDay / 100) * days);
       let totalReturn = inv.amount + earned;
 
-      if (days < inv.days) {                                                                                                               const penalty = Math.floor(totalReturn * INVESTMENT_CONFIG.earlyWithdrawPenalty);
+      if (days < inv.days) {
+        const penalty = Math.floor(totalReturn * INVESTMENT_CONFIG.earlyWithdrawPenalty);
         totalReturn -= penalty;
-        bot.sendMessage(id, `⚠ Досрочное снятие! Штраф: ${penalty} дуб. (50%)`);
+        bot.sendMessage(id, `⚠️ Досрочное снятие! Штраф: ${penalty} дуб. (50%)`);
       }
 
       inv.withdrawn = true;
 
       if (p.demoMode) {
-        p.demoBalance = safeNumber(p.demoBalance) + totalReturn;                                                                         } else {
+        p.demoBalance = safeNumber(p.demoBalance) + totalReturn;
+      } else {
         p.balance = safeNumber(p.balance) + totalReturn;
       }
 
@@ -3293,7 +3464,9 @@ p.lastActivity = Date.now();
         bot.sendMessage(id, '❌ Неверный номер.');
         delete adminState[id];
         return;
-      }                                                                                                                                  const ach = available[idx];                                                                                                        const balance = p.demoMode ? safeNumber(p.demoBalance) : safeNumber(p.balance);
+      }
+      const ach = available[idx];
+      const balance = p.demoMode ? safeNumber(p.demoBalance) : safeNumber(p.balance);
       if (balance < ach.cost) {
         bot.sendMessage(id, `❌ Не хватает. Нужно ${ach.cost} дуб.`);
         delete adminState[id];
@@ -3302,8 +3475,10 @@ p.lastActivity = Date.now();
 
       if (p.demoMode) {
         p.demoBalance = safeNumber(p.demoBalance) - ach.cost;
-      } else {                                                                                                                             p.balance = safeNumber(p.balance) - ach.cost;
-      }                                                                                                                                  p.achievements.push(ach.id);
+      } else {
+        p.balance = safeNumber(p.balance) - ach.cost;
+      }
+      p.achievements.push(ach.id);
       p.achievementBonus = (p.achievementBonus || 0) + ach.bonus;
 
       addHistory(id, `Купил достижение "${ach.name}" за ${ach.cost} дуб.`);
@@ -3335,7 +3510,7 @@ p.lastActivity = Date.now();
       p.demoBalance = safeNumber(p.demoBalance) - bet;
     } else {
       p.balance = safeNumber(p.balance) - bet;
-      }
+    }
     const game = blackjackGames[id];
     game.bet = bet;
     game.status = 'playing';
@@ -3347,7 +3522,8 @@ p.lastActivity = Date.now();
     const playerValue = getHandValue(game.playerHand);
     const dealerValue = getHandValue(game.dealerHand);
 
-    if (isBlackjack(game.playerHand) && !isBlackjack(game.dealerHand)) {                                                                 game.status = 'finished';
+    if (isBlackjack(game.playerHand) && !isBlackjack(game.dealerHand)) {
+      game.status = 'finished';
       finishBlackjack(id);
       return;
     }
@@ -3356,8 +3532,10 @@ p.lastActivity = Date.now();
       finishBlackjack(id);
       return;
     }
-    if (isBlackjack(game.playerHand) && isBlackjack(game.dealerHand)) {                                                                  game.status = 'finished';
-      finishBlackjack(id);                                                                                                               return;
+    if (isBlackjack(game.playerHand) && isBlackjack(game.dealerHand)) {
+      game.status = 'finished';
+      finishBlackjack(id);
+      return;
     }
 
     let splitAvailable = false;
@@ -3365,13 +3543,14 @@ p.lastActivity = Date.now();
       splitAvailable = true;
     }
 
-    const balanceAfter = p.demoMode ? safeNumber(p.demoBalance) : safeNumber(p.balance);
+  const balanceAfter = p.demoMode ? safeNumber(p.demoBalance) : safeNumber(p.balance);
     bot.sendMessage(id,
       `🎴 НАЧАЛО ИГРЫ!\n\n` +
-      `Твоя рука: ${formatHand(game.playerHand)} (${playerValue} очков)\n` +                                                             `Дилер: ${formatHand([game.dealerHand[0]])} (${getHandValue([game.dealerHand[0]])} очков)\n` +
+      `Твоя рука: ${formatHand(game.playerHand)} (${playerValue} очков)\n` +
+      `Дилер: ${formatHand([game.dealerHand[0]])} (${getHandValue([game.dealerHand[0]])} очков)\n` +
       `💰 Ставка: ${game.bet} дуб.\n` +
       `📊 Баланс: ${balanceAfter} дуб.\n` +
-      `${splitAvailable ? '✂ Доступен сплит!' : ''}`,
+      `${splitAvailable ? '✂️ Доступен сплит!' : ''}`,
       blackjackKeyboard()
     );
     return;
@@ -3385,7 +3564,8 @@ p.lastActivity = Date.now();
 
   if (!isNaN(amount) && amount >= 1) {
     // ===== ПРОВЕРКА: ЕСЛИ ИДЁТ ИГРА В БЛЭКДЖЕК =====
-    if (blackjackGames[id] && blackjackGames[id].status !== 'finished' && blackjackGames[id].status !== 'waiting') {                     return bot.sendMessage(id, '❌ Сначала заверши текущую игру в блэкджек!');
+    if (blackjackGames[id] && blackjackGames[id].status !== 'finished' && blackjackGames[id].status !== 'waiting') {
+      return bot.sendMessage(id, '❌ Сначала заверши текущую игру в блэкджек!');
     }
 
     if (!bank.roundActive) return bot.sendMessage(id, '⏳ Раунд не активен, подожди...');
@@ -3393,7 +3573,7 @@ p.lastActivity = Date.now();
     checkActivityBonus(p, id);
 
     // === ДУЭЛЬ ===
-    if (p.currentMode === '⚔ Дуэль') {
+    if (p.currentMode === '⚔️ Дуэль') {
       const isRealMoney = p.duelCurrency === '💰 Реальные деньги';
       let finalAmount = amount;
 
@@ -3416,21 +3596,22 @@ p.lastActivity = Date.now();
       if (duelChallenges[id]) {
         return bot.sendMessage(id, '❌ У тебя уже есть активный вызов. Нажми ❌ Отменить вызов', duelCancelKeyboard());
       }
-      if (p.bet > 0 && p.currentMode === '⚔ Дуэль') {
+      if (p.bet > 0 && p.currentMode === '⚔️ Дуэль') {
         return bot.sendMessage(id, '❌ Ты уже в дуэли. Дождись завершения.');
       }
 
       duelChallenges[id] = { amount: finalAmount, timestamp: Date.now(), isRealMoney };
       const username = p.username || 'Игрок';
 
-      let sentCount = 0;                                                                                                                 for (let pid in players) {
+      let sentCount = 0;
+      for (let pid in players) {
         if (pid == id) continue;
         const target = players[pid];
         const targetBalance = target.demoMode ? safeNumber(target.demoBalance) : safeNumber(target.balance);
         if (targetBalance >= finalAmount) {
           const currencyLabel = isRealMoney ? `(${Math.floor(finalAmount * 0.5)} ₽)` : '';
           bot.sendMessage(pid,
-            `⚔ НОВЫЙ ВЫЗОВ НА ДУЭЛЬ!\n\n` +
+            `⚔️ НОВЫЙ ВЫЗОВ НА ДУЭЛЬ!\n\n` +
             `Игрок: @${username}\n` +
             `Ставка: ${finalAmount} дуб. ${currencyLabel}\n` +
             `Твой баланс: ${targetBalance} дуб.\n\n` +
@@ -3455,7 +3636,8 @@ p.lastActivity = Date.now();
         }
       }, DUEL_TIMEOUT);
 
-      bot.sendMessage(id,                                                                                                                  `⚔ ВЫЗОВ ОТПРАВЛЕН!\n\n` +
+      bot.sendMessage(id,
+        `⚔️ ВЫЗОВ ОТПРАВЛЕН!\n\n` +
         `Ставка: ${finalAmount} дуб. ${isRealMoney ? `(${Math.floor(finalAmount * 0.5)} ₽)` : ''}\n` +
         `Твои деньги пока не списаны.\n` +
         `Ожидай, пока кто-то примет вызов.\n` +
@@ -3465,7 +3647,8 @@ p.lastActivity = Date.now();
       );
       return;
     }
-                                                                                                                                       // === VIP ===
+
+    // === VIP ===
     if (p.currentMode === '👑 VIP-игра') {
       if (amount < MIN_VIP_BET || amount > MAX_VIP_BET) {
         return bot.sendMessage(id, `❌ VIP-ставка от ${MIN_VIP_BET} до ${MAX_VIP_BET} ₽.`);
@@ -3496,12 +3679,12 @@ p.lastActivity = Date.now();
 
     // === КЛАССИКА ===
     if (p.currentMode === '🎲 Классика') {
-      if (p.bet > 0) return bot.sendMessage(id, '⚠ У тебя уже есть ставка. Сначала заверши игру.');
+      if (p.bet > 0) return bot.sendMessage(id, '⚠️ У тебя уже есть ставка. Сначала заверши игру.');
 
       const balance = p.demoMode ? safeNumber(p.demoBalance) : safeNumber(p.balance);
 
       const maxBet = MAX_CLASSIC_BET + (p.limitUpgrades || 0) * 1000;
-       if (amount > maxBet) {
+      if (amount > maxBet) {
         return bot.sendMessage(id, `❌ Максимальная ставка ${maxBet} дуб. (увеличено на ${(p.limitUpgrades || 0) * 1000})`);
       }
 
@@ -3509,7 +3692,8 @@ p.lastActivity = Date.now();
         return bot.sendMessage(id, `❌ Не хватает. У тебя ${balance} дуб.`);
       }
 
-      const feeData = getEntryFee(balance, amount, p.freeStakesUsed || 0);                                                               const entryFee = feeData.fee;
+      const feeData = getEntryFee(balance, amount, p.freeStakesUsed || 0);
+      const entryFee = feeData.fee;
       const totalCost = amount + entryFee;
 
       if (balance < totalCost) {
@@ -3519,7 +3703,8 @@ p.lastActivity = Date.now();
       if (p.demoMode) {
         p.demoBalance = safeNumber(p.demoBalance) - totalCost;
       } else {
-        p.balance = safeNumber(p.balance) - totalCost;                                                                                   }
+        p.balance = safeNumber(p.balance) - totalCost;
+      }
       p.bet = amount;
       p.hasRolled = false;
       p.canDouble = false;
@@ -3531,9 +3716,10 @@ p.lastActivity = Date.now();
       bank.pot = safeNumber(bank.pot) + entryFee;
 
       if (feeData.isFree) {
-        p.freeStakesUsed = (p.freeStakesUsed || 0) + 1;                                                                                  }
+        p.freeStakesUsed = (p.freeStakesUsed || 0) + 1;
+      }
 
-      bank.totalStakes = safeNumber(bank.totalStakes) + amount;
+    bank.totalStakes = safeNumber(bank.totalStakes) + amount;
       addHistory(id, `Ставка ${amount} (комиссия ${comm}, сбор ${entryFee})`);
       addBalanceHistory(id, -totalCost, `Ставка ${amount} (комиссия ${comm})`);
       saveData();
@@ -3587,7 +3773,8 @@ p.lastActivity = Date.now();
         if (p.stats.streak > p.stats.maxStreak) p.stats.maxStreak = p.stats.streak;
         p.totalEarned = safeNumber(p.totalEarned) + win;
         saveData();
-        bot.sendDice(id, { emoji: '🎲' }).catch(() => {});                                                                                 const balance = p.demoMode ? safeNumber(p.demoBalance) : safeNumber(p.balance);
+        bot.sendDice(id, { emoji: '🎲' }).catch(() => {});
+        const balance = p.demoMode ? safeNumber(p.demoBalance) : safeNumber(p.balance);
         bot.sendMessage(id, `🎰 ДЖЕКПОТ! ${dice1}+${dice2}=12, +${win} дуб! Баланс: ${balance}`, mainInlineKeyboard());
         return;
       }
@@ -3604,7 +3791,8 @@ p.lastActivity = Date.now();
         bank.pot = safeNumber(bank.pot) - Math.floor(safeNumber(bank.pot) * 0.5);
         addHistory(id, `Победа +${win}`);
         addBalanceHistory(id, win, 'Победа в классике');
-        p.bet = 0; p.hasRolled = true; p.canDouble = false;                                                                                p.stats.totalGames++; p.stats.wins++; p.stats.streak++;
+        p.bet = 0; p.hasRolled = true; p.canDouble = false;
+        p.stats.totalGames++; p.stats.wins++; p.stats.streak++;
         if (p.stats.streak > p.stats.maxStreak) p.stats.maxStreak = p.stats.streak;
         p.totalEarned = safeNumber(p.totalEarned) + win;
         checkAchievements(p, id);
@@ -3617,7 +3805,8 @@ p.lastActivity = Date.now();
         addHistory(id, `Проигрыш ${bet}`);
         addBalanceHistory(id, -bet, 'Проигрыш в классике');
         p.bet = 0; p.hasRolled = true; p.canDouble = false;
-        p.stats.totalGames++; p.stats.losses++; p.stats.streak = 0;                                                                        saveData();
+        p.stats.totalGames++; p.stats.losses++; p.stats.streak = 0;
+        saveData();
         bot.sendDice(id, { emoji: '🎲' }).catch(() => {});
         const balance = p.demoMode ? safeNumber(p.demoBalance) : safeNumber(p.balance);
         bot.sendMessage(id, `💀 ${dice1}+${dice2}=${sum} — ПРОИГРЫШ.\nБаланс: ${balance}`, mainInlineKeyboard());
@@ -3627,12 +3816,14 @@ p.lastActivity = Date.now();
         p.canDouble = true;
         p.hasRolled = true;
         p.stats.totalGames++; p.stats.points++;
-        jackpotCounter++;                                                                                                                  bank.jackpot = safeNumber(bank.jackpot) + 10;
+        jackpotCounter++;
+        bank.jackpot = safeNumber(bank.jackpot) + 10;
         // Убрано оповещение всем игрокам о джекпоте
         saveData();
         bot.sendDice(id, { emoji: '🎲' }).catch(() => {});
         const balance = p.demoMode ? safeNumber(p.demoBalance) : safeNumber(p.balance);
-        bot.sendMessage(id, `🎯 ${dice1}+${dice2}=${sum} — ТОЧКА!\nСтавка: ${bet} дуб.\nДжекпот: ${safeNumber(bank.jackpot)} дуб.\n⚡ Удвоить или 💰 Забрать`, doubleActionsKeyboard());                                                                                      return;
+        bot.sendMessage(id, `🎯 ${dice1}+${dice2}=${sum} — ТОЧКА!\nСтавка: ${bet} дуб.\nДжекпот: ${safeNumber(bank.jackpot)} дуб.\n⚡ Удвоить или 💰 Забрать`, doubleActionsKeyboard());
+        return;
       }
     }
 
@@ -3666,11 +3857,12 @@ p.lastActivity = Date.now();
       } else {
         p.vipStats.losses++;
         result = 'ПОРАЖЕНИЕ!';
-        }
+      }
       p.vipStats.totalGames++;
       p.bet = 0; p.hasRolled = true; p.canDouble = false;
       p.totalEarned = safeNumber(p.totalEarned) + (result === 'ПОБЕДА!' ? winAmount : 0);
-      if (result === 'ПОБЕДА!') addBalanceHistory(id, winAmount, 'VIP победа');                                                          else addBalanceHistory(id, -bet, 'VIP поражение');
+      if (result === 'ПОБЕДА!') addBalanceHistory(id, winAmount, 'VIP победа');
+      else addBalanceHistory(id, -bet, 'VIP поражение');
       saveData();
       bot.sendDice(id, { emoji: '🎲' }).catch(() => {});
       bot.sendDice(id, { emoji: '🎲' }).catch(() => {});
@@ -3685,27 +3877,32 @@ p.lastActivity = Date.now();
     }
   }
 
-  // ==================== СТАТИСТИКА ====================                                                                            if (text === '📈 Статистика') {
+  // ==================== СТАТИСТИКА ====================
+  if (text === '📈 Статистика') {
     const s = p.stats;
     const winRate = s.totalGames > 0 ? Math.round((s.wins / s.totalGames) * 100) : 0;
     const duel = p.duelStats;
     const duelRate = duel.totalGames > 0 ? Math.round((duel.wins / duel.totalGames) * 100) : 0;
-    const vip = p.vipStats;                                                                                                            const vipRate = vip.totalGames > 0 ? Math.round((vip.wins / vip.totalGames) * 100) : 0;
+    const vip = p.vipStats;
+    const vipRate = vip.totalGames > 0 ? Math.round((vip.wins / vip.totalGames) * 100) : 0;
     bot.sendMessage(id,
       `📊 ТВОЯ СТАТИСТИКА:\n\n` +
       `🎲 Классика:\n` +
       `  Игр: ${s.totalGames}, Побед: ${s.wins} (${winRate}%)\n` +
       `  Лучшая серия: ${s.maxStreak}\n\n` +
-      `⚔ Дуэль:\n` +
+      `⚔️ Дуэль:\n` +
       `  Игр: ${duel.totalGames}, Побед: ${duel.wins} (${duelRate}%)\n\n` +
-      `👑 VIP:\n` +                                                                                                                      `  Игр: ${vip.totalGames}, Побед: ${vip.wins} (${vipRate}%)`
+      `👑 VIP:\n` +
+      `  Игр: ${vip.totalGames}, Побед: ${vip.wins} (${vipRate}%)`
     );
-    return;                                                                                                                          }
+    return;
+  }
 
   // ==================== БАЛАНС ====================
   if (text === '📊 Баланс') {
     const balance = p.demoMode ? safeNumber(p.demoBalance) : safeNumber(p.balance);
-    bot.sendMessage(id,                                                                                                                  `💰 Основной: ${balance}\n` +
+    bot.sendMessage(id,
+      `💰 Основной: ${balance}\n` +
       `🎮 Демо: ${safeNumber(p.demoBalance)} (осталось ${20 - (p.demoRollsToday || 0)} бросков)`
     );
     return;
@@ -3721,7 +3918,7 @@ p.lastActivity = Date.now();
       return bot.sendMessage(id, `⏳ Бонус уже получен сегодня. Следующий через ${left} ч.`);
     }
 
-    const yesterday = new Date();
+  const yesterday = new Date();
     yesterday.setDate(yesterday.getDate() - 1);
     const yesterdayStr = yesterday.toDateString();
 
@@ -3752,12 +3949,14 @@ p.lastActivity = Date.now();
     bot.sendMessage(id, `🎁 Ежедневный бонус: +${bonus} дуб.!\n🔥 Серия: ${streak} дней подряд!\nБаланс: ${balance}`);
     return;
   }
-                                                                                                                                     // ==================== РЕФЕРАЛКА ====================
+
+  // ==================== РЕФЕРАЛКА ====================
   if (text === '🔗 Рефералка') {
     const botInfo = await bot.getMe();
     const link = `https://t.me/${botInfo.username}?start=ref_${id}`;
     bot.sendMessage(id,
-      `🔗 Твоя реф-ссылка:\n${link}\n\n` +                                                                                               `За каждого приведённого друга:\n` +
+      `🔗 Твоя реф-ссылка:\n${link}\n\n` +
+      `За каждого приведённого друга:\n` +
       `🎁 Ты получаешь 30 дуб.\n` +
       `🎁 Друг получаешь 15 дуб.\n\n` +
       `Друзей приведено: ${p.refs?.length || 0}`
@@ -3771,16 +3970,18 @@ p.lastActivity = Date.now();
     if (safeNumber(bank.pot) < MIN_BANK) return bot.sendMessage(id, `❌ Банк меньше ${MIN_BANK} дуб. Вывод временно недоступен.`);
     const hasPurchased = safeNumber(p.totalEarned) > 0;
     if (!hasPurchased && p.rank < 2) {
-      return bot.sendMessage(id, '❌ Вывод доступен только после покупки дублонов (от 500 дуб.) или достижения ранга Капитан.');       }
+      return bot.sendMessage(id, '❌ Вывод доступен только после покупки дублонов (от 500 дуб.) или достижения ранга Капитан.');
+    }
     const maxWithdraw = Math.floor(Math.min(safeNumber(p.balance) * MAX_WITHDRAW_PERCENT, MAX_WITHDRAW_DAILY));
-    if (maxWithdraw < MIN_WITHDRAW) return bot.sendMessage(id, `❌ Минимальный вывод ${MIN_WITHDRAW} дуб. У тебя доступно ${maxWith
-draw} дуб.`);
+    if (maxWithdraw < MIN_WITHDRAW) return bot.sendMessage(id, `❌ Минимальный вывод ${MIN_WITHDRAW} дуб. У тебя доступно ${maxWithdraw} дуб.`);
     bot.sendMessage(id,
       `💸 Выбери сумму вывода (мин ${MIN_WITHDRAW}, макс ${maxWithdraw}):\n` +
       `Баланс: ${safeNumber(p.balance)} дуб.\n` +
-      `Доступно сегодня: ${maxWithdraw} дуб. (комиссия 10%)`,                                                                            withdrawInlineKeyboard()
+      `Доступно сегодня: ${maxWithdraw} дуб. (комиссия 10%)`,
+      withdrawInlineKeyboard()
     );
-    return;                                                                                                                          }
+    return;
+  }
 
   if (text.startsWith('💸 ')) {
     const amount = parseInt(text.split(' ')[1]);
@@ -3794,10 +3995,10 @@ draw} дуб.`);
     const finalAmount = amount - withdrawFee;
     if (finalAmount < 1) return bot.sendMessage(id, '❌ Сумма слишком мала после комиссии.');
 
-    const today = new Date().toDateString();                                                                                           if (p.withdrawDate !== today) { p.withdrawToday = 0; p.withdrawDate = today; }
+    const today = new Date().toDateString();
+    if (p.withdrawDate !== today) { p.withdrawToday = 0; p.withdrawDate = today; }
     if ((p.withdrawToday || 0) + amount > MAX_WITHDRAW_DAILY) {
-      return bot.sendMessage(id, `❌ Лимит ${MAX_WITHDRAW_DAILY} дуб./сутки. Осталось: ${MAX_WITHDRAW_DAILY - (p.withdrawToday || 0
-)}`);
+      return bot.sendMessage(id, `❌ Лимит ${MAX_WITHDRAW_DAILY} дуб./сутки. Осталось: ${MAX_WITHDRAW_DAILY - (p.withdrawToday || 0)}`);
     }
     p.balance = safeNumber(p.balance) - amount;
     p.withdrawToday += amount;
@@ -3805,11 +4006,11 @@ draw} дуб.`);
     withdrawQueue.push({ id, amount: finalAmount, username: p.username, time: Date.now() });
     if (!p.withdrawHistory) p.withdrawHistory = [];
     p.withdrawHistory.push({ amount: finalAmount, fee: withdrawFee, date: new Date().toISOString(), status: 'ожидание' });
-    addHistory(id, `Запрос вывода ${finalAmount} (комиссия ${withdrawFee})`);                                                          addBalanceHistory(id, -amount, `Запрос вывода ${finalAmount} (комиссия ${withdrawFee})`);
-    saveData();                                                                                                                        bot.sendMessage(id, `✅ Запрос на ${finalAmount} дублонов принят (комиссия ${withdrawFee} дуб.).\nОжидай подтверждения.`, mainI
-nlineKeyboard());
-    bot.sendMessage(ADMIN_ID, `📤 ВЫВОД: @${p.username || id} — ${finalAmount} дуб. (комиссия ${withdrawFee}). Очередь: ${withdrawQ
-ueue.length}`);
+    addHistory(id, `Запрос вывода ${finalAmount} (комиссия ${withdrawFee})`);
+    addBalanceHistory(id, -amount, `Запрос вывода ${finalAmount} (комиссия ${withdrawFee})`);
+    saveData();
+    bot.sendMessage(id, `✅ Запрос на ${finalAmount} дублонов принят (комиссия ${withdrawFee} дуб.).\nОжидай подтверждения.`, mainInlineKeyboard());
+    bot.sendMessage(ADMIN_ID, `📤 ВЫВОД: @${p.username || id} — ${finalAmount} дуб. (комиссия ${withdrawFee}). Очередь: ${withdrawQueue.length}`);
     return;
   }
 
@@ -3821,7 +4022,7 @@ ueue.length}`);
 
   // ==================== СБРОС ДЕМО ====================
   if (text === '/resetdemo') {
-    p.demoBalance = 50;               
+    p.demoBalance = 50;
     p.demoRollsToday = 0;
     p.demoDate = new Date().toDateString();
     p.demoBet = 0;
@@ -3832,7 +4033,8 @@ ueue.length}`);
     return;
   }
 
-  // ==================== НЕИЗВЕСТНАЯ КНОПКА ====================                                                                    if (!text.startsWith('/')) {
+  // ==================== НЕИЗВЕСТНАЯ КНОПКА ====================
+  if (!text.startsWith('/')) {
     bot.sendMessage(id, `Главное меню:`, mainInlineKeyboard());
   }
 });
@@ -3844,7 +4046,9 @@ function scheduleTournament() {
   const hours = now.getHours();
   const minutes = now.getMinutes();
   const seconds = now.getSeconds();
-  const msUntilSunday = ((7 - day) % 7) * 86400000 + (23 - hours) * 3600000 + (59 - minutes) * 60000 + (59 - seconds) * 1000;        setTimeout(() => {                                                                                                                   startTournament();
+  const msUntilSunday = ((7 - day) % 7) * 86400000 + (23 - hours) * 3600000 + (59 - minutes) * 60000 + (59 - seconds) * 1000;
+  setTimeout(() => {
+    startTournament();
     setTimeout(() => {
       endTournament();
       if (tournaments.results.length > 0) {
@@ -3854,12 +4058,14 @@ function scheduleTournament() {
           if (players[winnerId].demoMode) {
             players[winnerId].demoBalance = safeNumber(players[winnerId].demoBalance) + prize;
           } else {
-            players[winnerId].balance = safeNumber(players[winnerId].balance) + prize;                                                       }
+            players[winnerId].balance = safeNumber(players[winnerId].balance) + prize;
+          }
           bot.sendMessage(winnerId, `🏆 ПОБЕДА В ТУРНИРЕ! Ты получил ${prize} дуб.`);
         }
         for (let i = 1; i < Math.min(10, tournaments.results.length); i++) {
           const pid = tournaments.results[i];
-          const prize = Math.floor(tournaments.prizePool * 0.05);                                                                            if (players[pid]) {
+          const prize = Math.floor(tournaments.prizePool * 0.05);
+          if (players[pid]) {
             if (players[pid].demoMode) {
               players[pid].demoBalance = safeNumber(players[pid].demoBalance) + prize;
             } else {
@@ -3909,18 +4115,21 @@ function startRound() {
     const p = players[id];
     const balance = p.demoMode ? safeNumber(p.demoBalance) : safeNumber(p.balance);
     if ((balance > 0 || safeNumber(p.demoBalance) > 0) && (now - p.lastPassiveTime < 86400000)) {
-      bot.sendMessage(id, `🎲 НОВЫЙ РАУНД! Банк: ${safeNumber(bank.pot)} | Джекпот: ${safeNumber(bank.jackpot)}`).catch(() => {});     }
+      bot.sendMessage(id, `🎲 НОВЫЙ РАУНД! Банк: ${safeNumber(bank.pot)} | Джекпот: ${safeNumber(bank.jackpot)}`).catch(() => {});
+    }
   }
   if (roundTimer) clearTimeout(roundTimer);
   roundTimer = setTimeout(() => {
     bank.roundActive = false;
-    const jackpotPart = Math.floor(safeNumber(bank.pot) * 0.8);                                                                        bank.jackpot = safeNumber(bank.jackpot) + jackpotPart;
+    const jackpotPart = Math.floor(safeNumber(bank.pot) * 0.8);
+    bank.jackpot = safeNumber(bank.jackpot) + jackpotPart;
     bank.pot = safeNumber(bank.pot) - jackpotPart;
     for (let id in players) {
       const p = players[id];
       const balance = p.demoMode ? safeNumber(p.demoBalance) : safeNumber(p.balance);
       if ((balance > 0 || safeNumber(p.demoBalance) > 0) && (Date.now() - p.lastPassiveTime < 86400000)) {
-        bot.sendMessage(id, `⏰ РАУНД ЗАВЕРШЁН! ${jackpotPart} ушло в джекпот (теперь ${safeNumber(bank.jackpot)}). Новый раунд через 30 сек.`).catch(() => {});                                                                                                            }
+        bot.sendMessage(id, `⏰ РАУНД ЗАВЕРШЁН! ${jackpotPart} ушло в джекпот (теперь ${safeNumber(bank.jackpot)}). Новый раунд через 30 сек.`).catch(() => {});
+      }
     }
     saveData();
     setTimeout(() => { bank.roundActive = false; startRound(); }, 30000);
@@ -3930,18 +4139,21 @@ function startRound() {
 // ==================== ИВЕНТЫ ====================
 function scheduleRandomEvent() {
   setTimeout(() => {
-    const event = EVENTS[Math.floor(Math.random() * EVENTS.length)];                                                                   activeEvent = event;
+    const event = EVENTS[Math.floor(Math.random() * EVENTS.length)];
+    activeEvent = event;
 
     for (let id in players) {
       const p = players[id];
       const balance = p.demoMode ? safeNumber(p.demoBalance) : safeNumber(p.balance);
-      if ((balance > 0 || safeNumber(p.demoBalance) > 0) && (Date.now() - p.lastPassiveTime < 86400000)) {                                 bot.sendMessage(id,
+      if ((balance > 0 || safeNumber(p.demoBalance) > 0) && (Date.now() - p.lastPassiveTime < 86400000)) {
+        bot.sendMessage(id,
           `🎉 СОБЫТИЕ АКТИВИРОВАНО!\n\n` +
           `${event.name}\n` +
           `${event.desc}\n` +
           `⏳ Длится ${event.duration / 60000} минут!`
         ).catch(() => {});
-      }                                                                                                                                }
+      }
+    }
 
     eventTimer = setTimeout(() => {
       activeEvent = null;
@@ -3995,7 +4207,7 @@ process.on('uncaughtException', (err) => {
   }, 5000);
 });
 
-console.log('🏴☠ ЧЁРНАЯ КОСТЬ v10.7 (ИСПРАВЛЕННАЯ) ЗАПУЩЕНА');
+console.log('🏴‍☠️ ЧЁРНАЯ КОСТЬ v10.7 (ИСПРАВЛЕННАЯ) ЗАПУЩЕНА');
 console.log(`👥 Игроков: ${Object.keys(players).length}`);
 console.log(`💰 Банк: ${safeNumber(bank.pot)}, Джекпот: ${safeNumber(bank.jackpot)}`);
 saveData();
