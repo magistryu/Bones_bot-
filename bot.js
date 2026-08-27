@@ -25,11 +25,7 @@ bot.on('polling_error', (err) => {
     }, 30000);
   }
   if (err.message.includes('409 Conflict')) {
-    console.log('🔄 Конфликт 409, перезапуск бота через 10 секунд...');
-    setTimeout(() => {
-      console.log('💀 Принудительный перезапуск бота');
-      process.exit(1);
-    }, 10000);
+    console.log('🔄 Конфликт 409 игнорируется. Бот продолжает работу.');
   }
 });
 
@@ -4210,6 +4206,7 @@ process.on('uncaughtException', (err) => {
 console.log('🏴‍☠️ ЧЁРНАЯ КОСТЬ v10.7 (ИСПРАВЛЕННАЯ) ЗАПУЩЕНА');
 console.log(`👥 Игроков: ${Object.keys(players).length}`);
 console.log(`💰 Банк: ${safeNumber(bank.pot)}, Джекпот: ${safeNumber(bank.jackpot)}`);
+
 // ==================== РЕЖИМ РАБОТЫ ПО РАСПИСАНИЮ ====================
 function checkWorkHours() {
   const now = new Date();
