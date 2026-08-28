@@ -4239,4 +4239,29 @@ checkWorkHours();
 setInterval(() => {
   checkWorkHours();
 }, 300000);
+
+// ==================== KEEP-ALIVE ВЕБ-СЕРВЕР ====================
+const express = require('express');
+const app = express();
+const PORT = process.env.PORT || 3000;
+
+app.get('/', (req, res) => {
+  const now = new Date();
+  const hours = now.getUTCHours();
+  const minutes = now.getUTCMinutes();
+  const currentTime = hours * 60 + minutes;
+
+  const WORK_START = 4 * 60;
+  const WORK_END = 20 * 60;
+
+  if (currentTime < WORK_START || currentTime >= WORK_END) {
+    res.send('🕒 Бот спит по расписанию');
+  } else {
+    res.send('🏴‍☠️ Бот работает');
+  }
+});
+
+app.listen(PORT, () => {
+  console.log(`🌐 Keep-alive сервер запущен на порту ${PORT}`);
+});
 saveData();
