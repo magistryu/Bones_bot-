@@ -1997,7 +1997,7 @@ bot.on('callback_query', async (query) => {
       const dice1b = Math.floor(Math.random() * 6) + 1;
       const sum1 = dice1a + dice1b;
       bot.sendDice(challengerId, { emoji: '🎲' }).catch(() => {});
-      await sleep(1500);
+      await sleep(500);
       bot.sendMessage(challengerId, `🎲 ${dice1a}+${dice1b}=${sum1}`);
 
       bot.sendMessage(id, `🎲 ТВОЙ БРОСОК!`);
@@ -2005,7 +2005,7 @@ bot.on('callback_query', async (query) => {
       const dice2b = Math.floor(Math.random() * 6) + 1;
       const sum2 = dice2a + dice2b;
       bot.sendDice(id, { emoji: '🎲' }).catch(() => {});
-      await sleep(1500);
+      await sleep(500);
       bot.sendMessage(id, `🎲 ${dice2a}+${dice2b}=${sum2}`);
 
       let winnerId = null;
