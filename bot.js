@@ -733,7 +733,7 @@ function isFlood(id) {
     bot.sendMessage(id, '⛔ Ты заблокирован на 1 час за подозрительную активность.');
     return true;
   }
-  if (rateLimit[id] && now - rateLimit[id] < 2000) {
+  if (rateLimit[id] && now - rateLimit[id] < 500) {
     console.log(`⚠️ Флуд от ${id} (${players[id]?.username || 'unknown'})`);
     return true;
   }
