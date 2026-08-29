@@ -2894,5 +2894,4 @@ console.log('🏴‍☠️ ЧЁРНАЯ КОСТЬ v6.0 (ПОЛНАЯ ВЕРСИ
 console.log(`👥 Игроков: ${Object.keys(players).length}`);
 console.log(`💰 Банк: ${safeNumber(bank.pot)}, Джекпот: ${safeNumber(bank.jackpot)}`);
 console.log('✅ ВСЕ 45 ПУНКТОВ РЕАЛИЗОВАНЫ!');
-
 saveData();
