@@ -1242,7 +1242,7 @@ bot.onText(/\/start/, async (msg) => {
       `🟩 ${bar}\n` +
       `💨 Пассивный доход: ${rank.passive} дуб./час`,
       {
-        reply_markup: {
+       reply_markup: {
         inline_keyboard: [
           [{ text: '🎰 Играть', callback_data: 'menu_play' }],
           [{ text: '💰 Профиль', callback_data: 'menu_profile' }, { text: '🏴‍☠️ Ранги', callback_data: 'menu_rank' }],
@@ -1253,7 +1253,6 @@ bot.onText(/\/start/, async (msg) => {
           [{ text: '🏆 Топ', callback_data: 'menu_top' }, { text: '💰 Банк', callback_data: 'menu_bank' }],
         ]
       }
-    );
   } 
     catch (error) {
     console.error('❌ Ошибка в /start:', error.message);
