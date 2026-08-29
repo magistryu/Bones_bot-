@@ -6,6 +6,16 @@ const express = require('express');
 
 const token = process.env.BOT_TOKEN;
 const ADMIN_ID = parseInt(process.env.ADMIN_ID);
+// ==================== ИНИЦИАЛИЗАЦИЯ БОТА ====================
+const bot = new TelegramBot(token, { 
+  polling: {
+    interval: 300,
+    autoStart: true,
+    params: {
+      timeout: 10
+    }
+  }
+});
 
 // ==================== КОНФИГУРАЦИЯ ====================
 const CONFIG = {
