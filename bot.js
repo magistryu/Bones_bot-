@@ -1242,6 +1242,7 @@ bot.onText(/\/start/, async (msg) => {
       `🟩 ${bar}\n` +
       `💨 Пассивный доход: ${rank.passive} дуб./час`,
       {
+        reply_markup: {
         inline_keyboard: [
           [{ text: '🎰 Играть', callback_data: 'menu_play' }],
           [{ text: '💰 Профиль', callback_data: 'menu_profile' }, { text: '🏴‍☠️ Ранги', callback_data: 'menu_rank' }],
