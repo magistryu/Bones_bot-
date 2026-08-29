@@ -1253,6 +1253,7 @@ bot.onText(/\/start/, async (msg) => {
           [{ text: '🏆 Топ', callback_data: 'menu_top' }, { text: '💰 Банк', callback_data: 'menu_bank' }],
         ]
       }
+    )
   } 
     catch (error) {
     console.error('❌ Ошибка в /start:', error.message);
