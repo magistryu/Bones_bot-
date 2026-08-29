@@ -1254,7 +1254,8 @@ bot.onText(/\/start/, async (msg) => {
         ]
       }
     );
-  } catch (error) {
+  } 
+    catch (error) {
     console.error('❌ Ошибка в /start:', error.message);
     console.error(error.stack);
     try {
