@@ -2377,6 +2377,7 @@ bot.on('message', async (msg) => {
       return;
     }
   }
+  
     // --- БЛЭКДЖЕК (Задача 5) ---
     if (p.currentMode === 'blackjack') {
       if (amount < BLACKJACK_CONFIG.minBet || amount > BLACKJACK_CONFIG.maxBet) {
