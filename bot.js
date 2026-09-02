@@ -9,24 +9,67 @@ const ADMIN_ID = parseInt(process.env.ADMIN_ID);
 // ==================== ИНИЦИАЛИЗАЦИЯ БОТА ====================
 const bot = new TelegramBot(token, {
   polling: {
-    interval: 300,
+    interval: 500,        // увеличено с 300
     autoStart: true,
     params: {
-      timeout: 10
+      timeout: 30         // увеличено с 10
     }
   }
 });
 
+// ==================== HEARTBEAT (ПОДДЕРЖКА СОЕДИНЕНИЯ) ====================
+setInterval(() => {
+  bot.getMe().then(() => {
+    console.log('💓 Heartbeat OK');
+  }).catch((err) => {
+    console.log('⚠️ Heartbeat ошибка:', err.message);
+    bot.stopPolling().catch(() => {});
+    setTimeout(() => {
+      bot.startPolling().catch(() => {});
+    }, 3000);
+  });
+}, 5 * 60 * 1000); // каждые 5 минут
+
+// ==================== ПРИНУДИТЕЛЬНЫЙ РЕСТАРТ POLLING (KEEP-ALIVE) ====================
+setInterval(() => {
+  console.log('🔄 Плановый рестарт polling (каждые 30 минут)');
+  bot.stopPolling().catch(() => {});
+  setTimeout(() => {
+    bot.startPolling().catch(() => {});
+  }, 2000);
+}, 30 * 60 * 1000); // 30 минут
+
+// ==================== ОБРАБОТЧИК ОШИБОК POLLING (РАСШИРЕННЫЙ) ====================
 bot.on('polling_error', (err) => {
   console.log('⚠️ Ошибка polling:', err.message);
-  if (err.message.includes('ECONNRESET') || err.message.includes('ETIMEDOUT')) {
-    console.log('🔄 Переподключение через 30 секунд...');
+  if (err.message.includes('ECONNRESET') || 
+      err.message.includes('ETIMEDOUT') || 
+      err.message.includes('EFATAL') || 
+      err.message.includes('socket hang up') ||
+      err.message.includes('read ECONNRESET')) {
+    console.log('🔄 Критическая ошибка — перезапуск через 10 секунд...');
     setTimeout(() => {
-      bot.startPolling();
+      bot.stopPolling().catch(() => {});
+      setTimeout(() => {
+        bot.startPolling().catch(() => {});
+      }, 2000);
+    }, 10000);
+  } else if (err.message.includes('409 Conflict')) {
+    console.log('🔄 Конфликт 409 — перезапуск через 5 секунд...');
+    setTimeout(() => {
+      bot.stopPolling().catch(() => {});
+      setTimeout(() => {
+        bot.startPolling().catch(() => {});
+      }, 2000);
+    }, 5000);
+  } else {
+    console.log('🔄 Неизвестная ошибка — перезапуск через 30 секунд...');
+    setTimeout(() => {
+      bot.stopPolling().catch(() => {});
+      setTimeout(() => {
+        bot.startPolling().catch(() => {});
+      }, 2000);
     }, 30000);
-  }
-  if (err.message.includes('409 Conflict')) {
-    console.log('🔄 Конфликт 409 игнорируется. Бот продолжает работу.');
   }
 });
 
@@ -84,7 +127,6 @@ function formatMessage(title, body, footer = '') {
     topLine = '💀🗡️🖤💀🗡️🖤💀🗡️🖤';
     bottomLine = '🌊⚓💀🌊⚓💀🌊⚓💀';
   } else {
-    // Нейтральная пиратская рамка — больше никаких пустых строк
     topLine = '🏴‍☠️🏴‍☠️🏴‍☠️🏴‍☠️🏴‍☠️';
     bottomLine = '🏴‍☠️🏴‍☠️🏴‍☠️🏴‍☠️🏴‍☠️';
   }
@@ -554,7 +596,7 @@ const SHIPS = [
   { id: 13, name: '⚡ Молния', cost: 1500000, income: 1500, upgradeCost: 750000, level: 0, maxLevel: 10 },
   { id: 14, name: '🌪️ Ураган', cost: 2000000, income: 2000, upgradeCost: 1000000, level: 0, maxLevel: 10 },
   { id: 15, name: '🌌 Звёздный странник', cost: 3000000, income: 3000, upgradeCost: 1500000, level: 0, maxLevel: 10 },
-  { id: 16, name: '♾️ Бесконечность', cost: 5000000, income: 5000, upgradeCost: 2500000, level: 0, maxLevel: 10 },
+    { id: 16, name: '♾️ Бесконечность', cost: 5000000, income: 5000, upgradeCost: 2500000, level: 0, maxLevel: 10 },
   { id: 17, name: '🔥 Феникс', cost: 8000000, income: 8000, upgradeCost: 4000000, level: 0, maxLevel: 10 },
   { id: 18, name: '💎 Алмазный дракон', cost: 12000000, income: 12000, upgradeCost: 6000000, level: 0, maxLevel: 10 },
   { id: 19, name: '👾 Космический пират', cost: 20000000, income: 20000, upgradeCost: 10000000, level: 0, maxLevel: 10 },
@@ -816,7 +858,7 @@ let adminState = {};
 let bans = {};
 let usedEvents = [];
 let chatHistory = [];
-const EVENT_COOLDOWN = 2 * 60 * 60 * 1000;
+const EVENT_COOLDOWN = 6 * 60 * 60 * 1000; // ИСПРАВЛЕНО: ровно 6 часов
 
 // ==================== ЕЖЕДНЕВНЫЕ ЗАДАНИЯ ====================
 const DAILY_QUESTS_POOL = [
@@ -1248,7 +1290,7 @@ function getRandomEvent() {
 }
 
 function scheduleRandomEvent() {
-  const delay = EVENT_COOLDOWN + Math.random() * (4 * 60 * 60 * 1000);
+  const delay = EVENT_COOLDOWN; // ИСПРАВЛЕНО: ровно 6 часов, без рандома
   setTimeout(() => {
     const event = getRandomEvent();
     activeEvent = event;
@@ -1292,18 +1334,15 @@ function scheduleRandomEvent() {
 // ==================== АНИМАЦИЯ СТИКЕРОВ (ИСПРАВЛЕНА) ====================
 async function sendDiceAnimation(chatId, playerSum, bankSum) {
   try {
-    // Стакан (всегда должен быть)
     await bot.sendSticker(chatId, STICKERS.shake).catch(() => {});
-    await sleep(200); // ускорено с 300 до 200
+    await sleep(200);
     
-    // Стикер игрока
     const playerSticker = getStickerForValue(playerSum);
     if (playerSticker) {
       await bot.sendSticker(chatId, playerSticker).catch(() => {});
     }
-    await sleep(200); // ускорено с 300 до 200
+    await sleep(200);
     
-    // Стикер банка
     const bankSticker = getStickerForValue(bankSum);
     if (bankSticker) {
       await bot.sendSticker(chatId, bankSticker).catch(() => {});
@@ -1614,7 +1653,7 @@ function processDuel(challengerId, opponentId, amount) {
   } else {
     winner.balance = safeNumber(winner.balance) + winAmount;
   }
-  winner.duelStats.wins++;
+    winner.duelStats.wins++;
   winner.duelStats.totalGames++;
   winner.totalEarned = safeNumber(winner.totalEarned) + winAmount;
   winner.games++;
@@ -1870,7 +1909,7 @@ bot.onText(/\/trade @(\w+) (\d+)/, async (msg, match) => {
   } else {
     p.balance = safeNumber(p.balance) - amount;
   }
-  if (target.demoMode) {
+    if (target.demoMode) {
     target.demoBalance = safeNumber(target.demoBalance) + finalAmount;
   } else {
     target.balance = safeNumber(target.balance) + finalAmount;
@@ -2136,7 +2175,7 @@ bot.onText(/\/start/, async (msg) => {
           addBalanceHistory(refId, 30, `Реферал @${p.username || id}`);
           addHistory(id, `Приветственный бонус: +15 дуб. от @${players[refId].username || refId}`);
           addBalanceHistory(id, 15, `Реферальный бонус`);
-          saveData();
+                    saveData();
           bot.sendMessage(refId, formatMessage('РЕФЕРАЛ', `🎁 Твой друг @${p.username || id} зарегистрировался! +30 дуб.`));
           bot.sendMessage(id, formatMessage('БОНУС', `🎁 Приветственный бонус +15 дуб. от @${players[refId].username || refId}!`));
         }
@@ -2421,9 +2460,9 @@ if (data === 'profile_games') {
     }
     bot.sendMessage(id, formatMessage('ИСТОРИЯ ИГР', msg), { reply_markup: backKeyboard() });
     return;
-  }
+}
 
-  // ==================== РАНГИ ====================
+         // ==================== РАНГИ ====================
   if (data === 'menu_rank') {
     let msg = '🏴‍☠️ ВСЕ РАНГИ ПИРАТОВ:\n\n';
     for (let i = 0; i < RANKS.length; i++) {
@@ -2655,7 +2694,7 @@ if (data === 'profile_games') {
     return;
   }
 
-  // ==================== РЕФЕРАЛКА ====================
+         // ==================== РЕФЕРАЛКА ====================
   if (data === 'menu_ref') {
     const botInfo = await bot.getMe();
     const link = `https://t.me/${botInfo.username}?start=ref_${id}`;
@@ -2921,8 +2960,8 @@ if (data === 'profile_games') {
       if (p.fleetProtection && p.fleetProtection > Date.now()) {
         const timeLeft = Math.ceil((p.fleetProtection - Date.now()) / 3600000);
         msg += `🛡️ Защита активна: ${timeLeft} ч.\n`;
-      }
-      msg += '\n';
+}
+            msg += '\n';
       p.fleet.ships.forEach(s => {
         const ship = SHIPS.find(sh => sh.id === s.id);
         if (ship) {
@@ -2989,7 +3028,6 @@ if (data === 'profile_games') {
       p.balance = safeNumber(p.balance) - ship.cost;
     }
     p.fleet.ships.push({ id: shipId, level: 0 });
-    // === ИСПРАВЛЕНИЕ: обновляем totalIncome сразу ===
     p.fleet.totalIncome = calculateTotalIncome(p);
     addHistory(id, `🚢 Купил корабль "${ship.name}" за ${ship.cost} дуб.`);
     addBalanceHistory(id, -ship.cost, `Покупка корабля ${ship.name}`);
@@ -3213,8 +3251,8 @@ if (data === 'profile_games') {
     if (!p.tempBet || p.tempBet !== amount) {
       bot.sendMessage(id, formatMessage('КЛАССИКА', '❌ Ставка не найдена. Начни заново.'));
       return;
-    }
-    if (p.demoMode) {
+        }
+        if (p.demoMode) {
       p.demoBalance = safeNumber(p.demoBalance) - amount;
     } else {
       p.balance = safeNumber(p.balance) - amount;
@@ -3495,7 +3533,7 @@ if (data === 'profile_games') {
     return;
   }
 
-  if (data === 'admin_player_stats') {
+         if (data === 'admin_player_stats') {
     bot.sendMessage(id, formatMessage('СТАТИСТИКА ИГРОКА', '📊 Введи ID игрока:'), { reply_markup: backKeyboard() });
     adminState[id] = { action: 'player_stats' };
     return;
@@ -3779,7 +3817,7 @@ bot.on('message', async (msg) => {
         players[targetId].balance = safeNumber(players[targetId].balance) - amount;
       }
       addHistory(targetId, `Админ списал ${amount} дуб.`);
-      addBalanceHistory(targetId, -amount, `Админ списал ${amount} дуб.`);
+            addBalanceHistory(targetId, -amount, `Админ списал ${amount} дуб.`);
       saveData();
       bot.sendMessage(id, formatMessage('АДМИН', `✅ Списано ${amount} дуб. у игрока ${targetId}.`));
       bot.sendMessage(targetId, formatMessage('АДМИН', `💸 Админ списал у тебя ${amount} дуб.`));
@@ -4031,7 +4069,7 @@ bot.on('message', async (msg) => {
       const playerDice2Emoji = getDiceEmoji(playerDice2);
       const adminDice1Emoji = getDiceEmoji(adminDice);
       const adminDice2Emoji = getDiceEmoji(adminDice2);
-      const resultMsg = `👑 VIP РЕЗУЛЬТАТ:\n\n` +
+            const resultMsg = `👑 VIP РЕЗУЛЬТАТ:\n\n` +
         `🎲 Ты: ${playerDice1Emoji} ${playerDice2Emoji} = ${playerSum}\n` +
         `🏴‍☠️ Админ: ${adminDice1Emoji} ${adminDice2Emoji} = ${adminSum}\n\n` +
         `${winAmount > 0 ? `💰 +${winAmount}` : winAmount < 0 ? `💸 ${winAmount}` : '💰 0'} дуб.\n` +
@@ -4252,12 +4290,13 @@ bot.onText(/\/menu/, (msg) => {
   });
 });
 
-console.log('🏴‍☠️ ЧЁРНАЯ КОСТЬ v15.1 — ИСПРАВЛЕННАЯ ВЕРСИЯ ЗАПУЩЕНА');
-console.log('✅ Исправлены чёрные полосы (всегда есть рамка)');
-console.log('✅ Исправлена анимация стикеров (защита от сбоев)');
-console.log('✅ Исправлен доход флота в профиле (обновляется сразу)');
-console.log('✅ Ускорена анимация (300→200 мс)');
-console.log('✅ Контекстный "Назад" НЕ ТРОГАЛИ (по твоей просьбе)');
+console.log('🏴‍☠️ ЧЁРНАЯ КОСТЬ v15.2 — СТАБИЛЬНАЯ ВЕРСИЯ ЗАПУЩЕНА');
+console.log('✅ События — ровно каждые 6 часов (без рандома)');
+console.log('✅ Polling: interval 500, timeout 30');
+console.log('✅ Расширенный обработчик polling_error');
+console.log('✅ Heartbeat (bot.getMe()) каждые 5 минут');
+console.log('✅ Принудительный рестарт polling каждые 30 минут');
+console.log('✅ Автоостановка по расписанию ОСТАВЛЕНА');
 console.log(`👥 Игроков: ${Object.keys(players).length}`);
 console.log(`💰 Банк: ${safeNumber(bank.pot)}, Джекпот: ${safeNumber(bank.jackpot)}`);
 
