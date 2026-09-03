@@ -19,10 +19,10 @@ const ADMIN_ID = parseInt(process.env.ADMIN_ID);
 // ==================== ИНИЦИАЛИЗАЦИЯ БОТА ====================
 const bot = new TelegramBot(token, {
   polling: {
-    interval: 500,        // увеличено с 300
+    interval: 500,
     autoStart: true,
     params: {
-      timeout: 30         // увеличено с 10
+      timeout: 30
     }
   }
 });
@@ -38,7 +38,7 @@ setInterval(() => {
       bot.startPolling().catch(() => {});
     }, 3000);
   });
-}, 5 * 60 * 1000); // каждые 5 минут
+}, 5 * 60 * 1000);
 
 // ==================== ПРИНУДИТЕЛЬНЫЙ РЕСТАРТ POLLING (KEEP-ALIVE) ====================
 setInterval(() => {
@@ -47,7 +47,7 @@ setInterval(() => {
   setTimeout(() => {
     bot.startPolling().catch(() => {});
   }, 2000);
-}, 30 * 60 * 1000); // 30 минут
+}, 30 * 60 * 1000);
 
 // ==================== ОБРАБОТЧИК ОШИБОК POLLING (РАСШИРЕННЫЙ) ====================
 bot.on('polling_error', (err) => {
@@ -112,7 +112,7 @@ const BLACKJACK_CONFIG = {
   minBet: 10
 };
 
-// ==================== ID СТИКЕРОВ (ТВОИ) ====================
+// ==================== ID СТИКЕРОВ (ТВОИ НОВЫЕ) ====================
 const STICKERS = {
   shake: 'CAACAgIAAxkBAAImK2qVKnUC49DYyxXsx6dyew6BA-IaAAJZpwACXMqoSMYaDb3UizwwPQQ',
   roll1: 'CAACAgIAAxkBAAInuGqZV1jt7yPxhtyvG89wVBa4pRIBAAKkmgACmPnJSJMIIE1zY3ENPQQ',
@@ -497,7 +497,7 @@ const DRAW_PHRASES = [
   '🌸 "Цветы удачи распустились на ветру!" 🌸',
   '🌺 "Гавайская ничья на тропическом острове!" 🌺',
   '🌻 "Подсолнух равновесия повернулся к солнцу!" 🌻',
-  '🌹 "Роза компромисса расцвела!" 🌹',
+    '🌹 "Роза компромисса расцвела!" 🌹',
   '🌷 "Тюльпан гармонии украсил палубу!" 🌷',
   '🌳 "Дуб мудрости дал тень в бою!" 🌳',
   '🌴 "Пальма согласия на берегу!" 🌴',
@@ -824,7 +824,7 @@ function finishBlackjack(playerId) {
     addBalanceHistory(playerId, winAmount, 'Блэкджек проигрыш');
   }
   const balance = p.demoMode ? safeNumber(p.demoBalance) : safeNumber(p.balance);
-  const msg = `🎴 РЕЗУЛЬТАТ:\n\n` +
+    const msg = `🎴 РЕЗУЛЬТАТ:\n\n` +
     `Твоя рука: ${formatHand(playerHand)} (${playerValue} очков)\n` +
     `Дилер: ${formatHand(dealerHand)} (${dealerValue} очков)\n\n` +
     `${result}\n` +
@@ -833,10 +833,11 @@ function finishBlackjack(playerId) {
     `${phrase}`;
   bot.sendMessage(playerId, formatMessage('БЛЭКДЖЕК РЕЗУЛЬТАТ', msg), blackjackResultKeyboard());
   delete blackjackGames[playerId];
+  // === ИСПРАВЛЕННАЯ ПРОВЕРКА ЗАДАНИЙ ===
   const quests = checkDailyQuests(playerId);
-  if (quests) {
+  if (quests && quests.length > 0) {
     for (let q of quests) {
-      if (q.condition(p) && !(p.dailyQuestsCompleted || []).includes(q.id)) {
+      if (typeof q.condition === 'function' && q.condition(p) && !(p.dailyQuestsCompleted || []).includes(q.id)) {
         const success = completeDailyQuest(playerId, q.id);
         if (success) {
           bot.sendMessage(playerId, formatMessage('📋 ЗАДАНИЕ ВЫПОЛНЕНО!', `✅ ${q.name}\n💰 +${q.reward} дуб.`));
@@ -868,7 +869,7 @@ let adminState = {};
 let bans = {};
 let usedEvents = [];
 let chatHistory = [];
-const EVENT_COOLDOWN = 6 * 60 * 60 * 1000; // ИСПРАВЛЕНО: ровно 6 часов
+const EVENT_COOLDOWN = 6 * 60 * 60 * 1000;
 
 // ==================== ЕЖЕДНЕВНЫЕ ЗАДАНИЯ ====================
 const DAILY_QUESTS_POOL = [
@@ -914,25 +915,38 @@ function generateDailyQuests() {
   return shuffled.slice(0, 5);
 }
 
+// ==================== ИСПРАВЛЕННАЯ ФУНКЦИЯ checkDailyQuests ====================
 function checkDailyQuests(id) {
   const p = getPlayer(id);
-  if (!p) return;
+  if (!p) return null;
   const today = new Date().toDateString();
-  if (p.dailyQuestsDate !== today) {
+  if (p.dailyQuestsDate !== today || !p.dailyQuests || p.dailyQuests.length === 0) {
     p.dailyQuests = generateDailyQuests();
     p.dailyQuestsDate = today;
     p.dailyQuestsCompleted = [];
     saveData();
   }
+  // Проверка на повреждённые задания (из-за JSON)
+  if (p.dailyQuests && p.dailyQuests.length > 0) {
+    const broken = p.dailyQuests.some(q => typeof q.condition !== 'function');
+    if (broken) {
+      console.log('⚠️ Обнаружены повреждённые задания! Пересоздаём...');
+      p.dailyQuests = generateDailyQuests();
+      p.dailyQuestsCompleted = [];
+      saveData();
+    }
+  }
   return p.dailyQuests;
 }
 
+// ==================== ИСПРАВЛЕННАЯ ФУНКЦИЯ completeDailyQuest ====================
 function completeDailyQuest(id, questId) {
   const p = getPlayer(id);
   if (!p) return false;
   if (p.dailyQuestsCompleted && p.dailyQuestsCompleted.includes(questId)) return false;
   const quest = p.dailyQuests.find(q => q.id === questId);
   if (!quest) return false;
+  if (typeof quest.condition !== 'function') return false;
   if (!quest.condition(p)) return false;
   p.dailyQuestsCompleted.push(questId);
   if (p.demoMode) {
@@ -1297,10 +1311,10 @@ function getRandomEvent() {
   const event = available[Math.floor(Math.random() * available.length)];
   usedEvents.push(event.name);
   return event;
-}
+                             }
 
 function scheduleRandomEvent() {
-  const delay = EVENT_COOLDOWN; // ИСПРАВЛЕНО: ровно 6 часов, без рандома
+  const delay = EVENT_COOLDOWN;
   setTimeout(() => {
     const event = getRandomEvent();
     activeEvent = event;
@@ -1341,12 +1355,12 @@ function scheduleRandomEvent() {
   }, delay);
 }
 
-// ==================== АНИМАЦИЯ СТИКЕРОВ (ПАЧКАМИ: 2 КУБИКА ИГРОКА, 2 КУБИКА БАНКА) ====================
+// ==================== АНИМАЦИЯ СТИКЕРОВ (ИСПРАВЛЕННАЯ) ====================
 async function sendDiceAnimation(chatId, playerDice1, playerDice2, bankDice1, bankDice2) {
   try {
     // 1. Стакан (тряска)
     await bot.sendSticker(chatId, STICKERS.shake).catch(() => {});
-    await sleep(3000);
+    await sleep(2000); // 2 секунды
     
     // 2. Два кубика игрока ОДНОВРЕМЕННО
     const playerSticker1 = getStickerForValue(playerDice1);
@@ -1357,7 +1371,7 @@ async function sendDiceAnimation(chatId, playerDice1, playerDice2, bankDice1, ba
     if (playerSticker2) {
       await bot.sendSticker(chatId, playerSticker2).catch(() => {});
     }
-    await sleep(3000);
+    await sleep(3000); // 3 секунды
     
     // 3. Два кубика банка ОДНОВРЕМЕННО
     const bankSticker1 = getStickerForValue(bankDice1);
@@ -1368,6 +1382,7 @@ async function sendDiceAnimation(chatId, playerDice1, playerDice2, bankDice1, ba
     if (bankSticker2) {
       await bot.sendSticker(chatId, bankSticker2).catch(() => {});
     }
+    // После отправки стикеров банка — результат выведется в основном коде
   } catch (e) {
     console.log('⚠️ Ошибка анимации стикеров:', e.message);
   }
@@ -1699,7 +1714,7 @@ function processDuel(challengerId, opponentId, amount) {
   const quests = checkDailyQuests(challengerId);
   if (quests) {
     for (let q of quests) {
-      if (q.condition(challenger) && !(challenger.dailyQuestsCompleted || []).includes(q.id)) {
+      if (typeof q.condition === 'function' && q.condition(challenger) && !(challenger.dailyQuestsCompleted || []).includes(q.id)) {
         const success = completeDailyQuest(challengerId, q.id);
         if (success) {
           bot.sendMessage(challengerId, formatMessage('📋 ЗАДАНИЕ ВЫПОЛНЕНО!', `✅ ${q.name}\n💰 +${q.reward} дуб.`));
@@ -2520,7 +2535,7 @@ if (data === 'profile_games') {
       bot.sendMessage(id, formatMessage('РАНГ', `❌ Не хватает. Нужно ${r.costDublons} дуб.`), { reply_markup: backKeyboard() });
       return;
     }
-    if (p.demoMode) {
+        if (p.demoMode) {
       p.demoBalance = safeNumber(p.demoBalance) - r.costDublons;
     } else {
       p.balance = safeNumber(p.balance) - r.costDublons;
@@ -2903,7 +2918,7 @@ if (data === 'profile_games') {
     return;
   }
 
-  // ==================== ЕЖЕДНЕВНЫЕ ЗАДАНИЯ ====================
+         // ==================== ЕЖЕДНЕВНЫЕ ЗАДАНИЯ ====================
   if (data === 'menu_quests') {
     const quests = checkDailyQuests(id);
     if (!quests) {
@@ -2915,7 +2930,7 @@ if (data === 'profile_games') {
     let allDone = true;
     quests.forEach(q => {
       const done = completed.includes(q.id);
-      const status = done ? '✅' : (q.condition(p) ? '🔄' : '⏳');
+      const status = done ? '✅' : (q.condition && typeof q.condition === 'function' && q.condition(p) ? '🔄' : '⏳');
       if (!done) allDone = false;
       msg += `${status} ${q.name} — ${q.reward} дуб.\n`;
     });
@@ -3284,7 +3299,11 @@ if (data === 'profile_games') {
     const bankDice = Math.floor(Math.random() * 6) + 1;
     const bankDice2 = Math.floor(Math.random() * 6) + 1;
     const bankSum = bankDice + bankDice2;
+    
+    // === ОТПРАВЛЯЕМ АНИМАЦИЮ ===
     await sendDiceAnimation(id, playerDice, playerDice2, bankDice, bankDice2);
+    
+    // === ДАЛЬШЕ ИДЁТ РЕЗУЛЬТАТ ===
     let winAmount = 0;
     let isWin = false;
     let isPoint = false;
@@ -3308,7 +3327,7 @@ if (data === 'profile_games') {
       });
       return;
     }
-    if (playerSum > bankSum) {
+        if (playerSum > bankSum) {
       winAmount = amount * 2;
       if (p.demoMode) {
         p.demoBalance = safeNumber(p.demoBalance) + winAmount;
@@ -3343,10 +3362,11 @@ if (data === 'profile_games') {
     checkJackpotBonus(id, amount, isWin);
     saveData();
 
+    // === ИСПРАВЛЕННАЯ ПРОВЕРКА ЗАДАНИЙ ===
     const quests = checkDailyQuests(id);
     if (quests) {
       for (let q of quests) {
-        if (q.condition(p) && !(p.dailyQuestsCompleted || []).includes(q.id)) {
+        if (typeof q.condition === 'function' && q.condition(p) && !(p.dailyQuestsCompleted || []).includes(q.id)) {
           const success = completeDailyQuest(id, q.id);
           if (success) {
             bot.sendMessage(id, formatMessage('📋 ЗАДАНИЕ ВЫПОЛНЕНО!', `✅ ${q.name}\n💰 +${q.reward} дуб.`));
@@ -3704,7 +3724,7 @@ if (data === 'profile_games') {
       return;
     }
 
-    const challenger = players[challengerId];
+      const challenger = players[challengerId];
     if (!challenger) {
       bot.sendMessage(id, formatMessage('ДУЭЛЬ', '❌ Игрок не найден.'));
       delete duelChallenges[challengerId];
@@ -4086,7 +4106,7 @@ bot.on('message', async (msg) => {
         phrase = DRAW_PHRASES[Math.floor(Math.random() * DRAW_PHRASES.length)];
         resultTitle = 'VIP НИЧЬЯ!';
       }
-      const playerDice1Emoji = getDiceEmoji(playerDice);
+            const playerDice1Emoji = getDiceEmoji(playerDice);
       const playerDice2Emoji = getDiceEmoji(playerDice2);
       const adminDice1Emoji = getDiceEmoji(adminDice);
       const adminDice2Emoji = getDiceEmoji(adminDice2);
@@ -4105,7 +4125,7 @@ bot.on('message', async (msg) => {
       const quests = checkDailyQuests(id);
       if (quests) {
         for (let q of quests) {
-          if (q.condition(p) && !(p.dailyQuestsCompleted || []).includes(q.id)) {
+          if (typeof q.condition === 'function' && q.condition(p) && !(p.dailyQuestsCompleted || []).includes(q.id)) {
             const success = completeDailyQuest(id, q.id);
             if (success) {
               bot.sendMessage(id, formatMessage('📋 ЗАДАНИЕ ВЫПОЛНЕНО!', `✅ ${q.name}\n💰 +${q.reward} дуб.`));
@@ -4325,13 +4345,11 @@ bot.onText(/\/menu/, (msg) => {
   });
 });
 
-console.log('🏴‍☠️ ЧЁРНАЯ КОСТЬ v15.2 — СТАБИЛЬНАЯ ВЕРСИЯ ЗАПУЩЕНА');
-console.log('✅ События — ровно каждые 6 часов (без рандома)');
-console.log('✅ Polling: interval 500, timeout 30');
-console.log('✅ Расширенный обработчик polling_error');
-console.log('✅ Heartbeat (bot.getMe()) каждые 5 минут');
-console.log('✅ Принудительный рестарт polling каждые 30 минут');
-console.log('✅ Автоостановка по расписанию ОСТАВЛЕНА');
+console.log('🏴‍☠️ ЧЁРНАЯ КОСТЬ v15.3 — ИСПРАВЛЕННАЯ ВЕРСИЯ ЗАПУЩЕНА');
+console.log('✅ Починены задания (dailyQuests) — больше не падают');
+console.log('✅ Анимация: стакан → 2 стикера игрока → 2 стикера банка');
+console.log('✅ Задержки: стакан 2с, между пачками 3с');
+console.log('✅ Новые ID стикеров установлены');
 console.log(`👥 Игроков: ${Object.keys(players).length}`);
 console.log(`💰 Банк: ${safeNumber(bank.pot)}, Джекпот: ${safeNumber(bank.jackpot)}`);
 
