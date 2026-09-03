@@ -1346,21 +1346,21 @@ async function sendDiceAnimation(chatId, playerDice1, playerDice2, bankDice1, ba
   try {
     // Стакан (тряска)
     await bot.sendSticker(chatId, STICKERS.shake).catch(() => {});
-    await sleep(1500); // 1.5 секунды
+    await sleep(3000); // 3 секунды
     
     // Стикер первого кубика игрока
     const playerSticker1 = getStickerForValue(playerDice1);
     if (playerSticker1) {
       await bot.sendSticker(chatId, playerSticker1).catch(() => {});
     }
-    await sleep(1500); // 1.5 секунды
+    await sleep(3000); //  секунды
     
     // Стикер второго кубика игрока
     const playerSticker2 = getStickerForValue(playerDice2);
     if (playerSticker2) {
       await bot.sendSticker(chatId, playerSticker2).catch(() => {});
     }
-    await sleep(1500); // 1.5 секунды
+    await sleep(3000); // 3 секунды
     
     // Стикер первого кубика банка
     const bankSticker1 = getStickerForValue(bankDice1);
