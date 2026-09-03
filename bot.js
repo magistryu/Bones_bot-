@@ -115,12 +115,12 @@ const BLACKJACK_CONFIG = {
 // ==================== ID СТИКЕРОВ (ТВОИ) ====================
 const STICKERS = {
   shake: 'CAACAgIAAxkBAAImK2qVKnUC49DYyxXsx6dyew6BA-IaAAJZpwACXMqoSMYaDb3UizwwPQQ',
-  roll1: 'CAACAgIAAxkBAAImLGqVKngsUEhEQi5NDCGoWc1nv4UgAAIgnwAC9CqxSOsL_8AsGd_EPQQ',
-  roll2: 'CAACAgIAAxkBAAImMWqVKnv5kQjP_Vuhx5l7FEYzWh8ZAALvoAAC_g2pSKRq2EnFiUl9PQQ',
-  roll3: 'CAACAgIAAxkBAAImMGqVKnpD05eEeGg3kBHq7VKL5yi4AAL6uQAC6r-oSBIWg8YH66i4PQQ',
-  roll4: 'CAACAgIAAxkBAAImL2qVKnowoHnmYRovDZH5ygFOdOQBAAKaogAC5Y2oSIiSDmEI_wABwD0E',
-  roll5: 'CAACAgIAAxkBAAImLmqVKnnxQA9GtKy-4ueEj3tsYzduAAJIogACrX-oSHK7p41z30ZBPQQ',
-  roll6: 'CAACAgIAAxkBAAImLWqVKnmTEahGTAABR8o2e9xCQg9F4gAC6Z8AAl82qEgN1TGCxGIDMD0E',
+  roll1: 'CAACAgIAAxkBAAInuGqZV1jt7yPxhtyvG89wVBa4pRIBAAKkmgACmPnJSJMIIE1zY3ENPQQ',
+  roll2: 'CAACAgIAAxkBAAInumqZV3Z8ubGqvZ91_wcphmiHbZOzAAKRwgACPWrJSDe-6CcYE1RMPQQ',
+  roll3: 'CAACAgIAAxkBAAInvGqZV5UXAAFpSDwDrSpQfW02iwW9hwACZaEAAks00Ehm45P7jP31Ez0E',
+  roll4: 'CAACAgIAAxkBAAInvmqZV7Y-aqaj3bmvAAFX8DMPZ5kpGAACFaIAAro9yUg9d5cZIhDpzz0E',
+  roll5: 'CAACAgIAAxkBAAInwGqZV8fA9EG-KLn4NiX8Xa1qgSGhAAKJmwAC_tzISBupstx-GKRhPQQ',
+  roll6: 'CAACAgIAAxkBAAInwmqZV9Wspp2zZQc-Jp9qem_iT6O6AAI5rwACHT_JSKmI5bIblXJZPQQ',
 };
 
 // ==================== ФОРМАТТЕР СООБЩЕНИЙ (БЕЗ ПОЛОС — ИСПРАВЛЕН) ====================
@@ -1341,36 +1341,30 @@ function scheduleRandomEvent() {
   }, delay);
 }
 
-// ==================== АНИМАЦИЯ СТИКЕРОВ (ПОКУБИКОВАЯ) ====================
+// ==================== АНИМАЦИЯ СТИКЕРОВ (ПАЧКАМИ: 2 КУБИКА ИГРОКА, 2 КУБИКА БАНКА) ====================
 async function sendDiceAnimation(chatId, playerDice1, playerDice2, bankDice1, bankDice2) {
   try {
-    // Стакан (тряска)
+    // 1. Стакан (тряска)
     await bot.sendSticker(chatId, STICKERS.shake).catch(() => {});
-    await sleep(3000); // 3 секунды
+    await sleep(3000);
     
-    // Стикер первого кубика игрока
+    // 2. Два кубика игрока ОДНОВРЕМЕННО
     const playerSticker1 = getStickerForValue(playerDice1);
+    const playerSticker2 = getStickerForValue(playerDice2);
     if (playerSticker1) {
       await bot.sendSticker(chatId, playerSticker1).catch(() => {});
     }
-    await sleep(3000); //  секунды
-    
-    // Стикер второго кубика игрока
-    const playerSticker2 = getStickerForValue(playerDice2);
     if (playerSticker2) {
       await bot.sendSticker(chatId, playerSticker2).catch(() => {});
     }
-    await sleep(3000); // 3 секунды
+    await sleep(3000);
     
-    // Стикер первого кубика банка
+    // 3. Два кубика банка ОДНОВРЕМЕННО
     const bankSticker1 = getStickerForValue(bankDice1);
+    const bankSticker2 = getStickerForValue(bankDice2);
     if (bankSticker1) {
       await bot.sendSticker(chatId, bankSticker1).catch(() => {});
     }
-    await sleep(1500); // 1.5 секунды
-    
-    // Стикер второго кубика банка
-    const bankSticker2 = getStickerForValue(bankDice2);
     if (bankSticker2) {
       await bot.sendSticker(chatId, bankSticker2).catch(() => {});
     }
