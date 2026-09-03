@@ -2,6 +2,16 @@ require('dotenv').config();
 const TelegramBot = require('node-telegram-bot-api');
 const fs = require('fs');
 const express = require('express');
+// ==================== ГЛОБАЛЬНЫЙ ПЕРЕХВАТ ОШИБОК ====================
+process.on('uncaughtException', (err) => {
+  console.error('❌ НЕПЕРЕХВАЧЕННАЯ ОШИБКА:', err.message);
+  console.error('📚 Стек:', err.stack);
+  // Не даём процессу умереть
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('❌ НЕОБРАБОТАННЫЙ REJECTION:', reason);
+});
 
 const token = process.env.BOT_TOKEN;
 const ADMIN_ID = parseInt(process.env.ADMIN_ID);
@@ -4230,40 +4240,54 @@ setInterval(() => {
   }
 }, 6 * 3600000);
 
-const now = new Date();
-const hours = now.getUTCHours();
-const minutes = now.getUTCMinutes();
-const currentTime = hours * 60 + minutes;
-const WORK_START = 4 * 60;
-const WORK_END = 20 * 60;
-if (currentTime < WORK_START || currentTime >= WORK_END) {
-  if (bot.isPolling) {
-    bot.stopPolling();
-    console.log(`⏰ Бот остановлен (${hours}:${minutes} UTC). Жду утра...`);
-  }
-} else {
-  if (!bot.isPolling) {
-    bot.startPolling();
-    console.log(`⏰ Бот запущен (${hours}:${minutes} UTC)`);
-  }
-}
+// ==================== МОНИТОРИНГ ПАМЯТИ ====================
 setInterval(() => {
+  const used = process.memoryUsage();
+  const rssMB = Math.round(used.rss / 1024 / 1024);
+  const heapMB = Math.round(used.heapUsed / 1024 / 1024);
+  console.log(`💾 ПАМЯТЬ: RSS=${rssMB}MB, Heap=${heapMB}MB`);
+  
+  if (used.heapUsed > 400 * 1024 * 1024) {
+    console.log('⚠️ ПАМЯТЬ ПРЕВЫШЕНА! Принудительный GC...');
+    if (global.gc) {
+      global.gc();
+      console.log('✅ GC выполнен');
+    }
+  }
+}, 5 * 60 * 1000);
+
+// ==================== РАСПИСАНИЕ РАБОТЫ (UTC) ====================
+const WORK_START = 4 * 60;  // 4:00 UTC = 7:00 MSK
+const WORK_END = 20 * 60;   // 20:00 UTC = 23:00 MSK
+
+console.log(`🕐 Текущее UTC время: ${new Date().toUTCString()}`);
+console.log(`📅 Расписание: старт в ${Math.floor(WORK_START/60)}:${String(WORK_START%60).padStart(2,'0')} UTC, стоп в ${Math.floor(WORK_END/60)}:${String(WORK_END%60).padStart(2,'0')} UTC`);
+
+function checkSchedule() {
   const now = new Date();
   const hours = now.getUTCHours();
   const minutes = now.getUTCMinutes();
   const currentTime = hours * 60 + minutes;
-  if (currentTime < WORK_START || currentTime >= WORK_END) {
+  const isWorkTime = currentTime >= WORK_START && currentTime < WORK_END;
+  
+  if (!isWorkTime) {
     if (bot.isPolling) {
-      bot.stopPolling();
-      console.log(`⏰ Бот остановлен (${hours}:${minutes} UTC). Жду утра...`);
+      bot.stopPolling().catch(() => {});
+      console.log(`⏰ [${now.toUTCString()}] Бот ОСТАНОВЛЕН (вне рабочего времени). Жду ${Math.floor(WORK_START/60)}:${String(WORK_START%60).padStart(2,'0')} UTC...`);
     }
   } else {
     if (!bot.isPolling) {
-      bot.startPolling();
-      console.log(`⏰ Бот запущен (${hours}:${minutes} UTC)`);
+      bot.startPolling().catch(() => {});
+      console.log(`⏰ [${now.toUTCString()}] Бот ЗАПУЩЕН (рабочее время).`);
     }
   }
-}, 300000);
+}
+
+// Проверяем сразу при старте
+checkSchedule();
+
+// Проверяем каждую минуту
+setInterval(checkSchedule, 60 * 1000);
 
 bot.setMyCommands([
   { command: 'menu', description: 'Главное меню' },
