@@ -3291,7 +3291,7 @@ if (data === 'profile_games') {
     const bankDice = Math.floor(Math.random() * 6) + 1;
     const bankDice2 = Math.floor(Math.random() * 6) + 1;
     const bankSum = bankDice + bankDice2;
-    await sendDiceAnimation(id, playerSum, bankSum);
+    await sendDiceAnimation(id, playerDice, playerDice2, bankDice, bankDice2);
     let winAmount = 0;
     let isWin = false;
     let isPoint = false;
@@ -3457,7 +3457,7 @@ if (data === 'profile_games') {
     const playerDice = Math.floor(Math.random() * 6) + 1;
     const playerDice2 = Math.floor(Math.random() * 6) + 1;
     const playerSum = playerDice + playerDice2;
-    await sendDiceAnimation(id, playerSum, 0);
+    await sendDiceAnimation(id, playerDice, playerDice2, 0, 0);
     if (playerDice === playerDice2) {
       p.point = playerSum;
       saveData();
@@ -4058,7 +4058,7 @@ bot.on('message', async (msg) => {
       const adminDice = Math.floor(Math.random() * 6) + 1;
       const adminDice2 = Math.floor(Math.random() * 6) + 1;
       const adminSum = adminDice + adminDice2;
-      await sendDiceAnimation(id, playerSum, adminSum);
+      await sendDiceAnimation(id, playerDice, playerDice2, adminDice, adminDice2);
       let winAmount = 0;
       if (playerSum > adminSum) {
         winAmount = amount * 3;
