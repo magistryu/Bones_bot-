@@ -1341,34 +1341,33 @@ function scheduleRandomEvent() {
   }, delay);
 }
 
-// ==================== АНИМАЦИЯ СТИКЕРОВ (ИСПРАВЛЕНА) ====================
 // ==================== АНИМАЦИЯ СТИКЕРОВ (ПОКУБИКОВАЯ) ====================
 async function sendDiceAnimation(chatId, playerDice1, playerDice2, bankDice1, bankDice2) {
   try {
     // Стакан (тряска)
     await bot.sendSticker(chatId, STICKERS.shake).catch(() => {});
-    await sleep(2000);
+    await sleep(1500); // 1.5 секунды
     
     // Стикер первого кубика игрока
     const playerSticker1 = getStickerForValue(playerDice1);
     if (playerSticker1) {
       await bot.sendSticker(chatId, playerSticker1).catch(() => {});
     }
-    await sleep(500);
+    await sleep(1500); // 1.5 секунды
     
     // Стикер второго кубика игрока
     const playerSticker2 = getStickerForValue(playerDice2);
     if (playerSticker2) {
       await bot.sendSticker(chatId, playerSticker2).catch(() => {});
     }
-    await sleep(500);
+    await sleep(1500); // 1.5 секунды
     
     // Стикер первого кубика банка
     const bankSticker1 = getStickerForValue(bankDice1);
     if (bankSticker1) {
       await bot.sendSticker(chatId, bankSticker1).catch(() => {});
     }
-    await sleep(500);
+    await sleep(1500); // 1.5 секунды
     
     // Стикер второго кубика банка
     const bankSticker2 = getStickerForValue(bankDice2);
