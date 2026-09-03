@@ -1342,20 +1342,38 @@ function scheduleRandomEvent() {
 }
 
 // ==================== АНИМАЦИЯ СТИКЕРОВ (ИСПРАВЛЕНА) ====================
-async function sendDiceAnimation(chatId, playerSum, bankSum) {
+// ==================== АНИМАЦИЯ СТИКЕРОВ (ПОКУБИКОВАЯ) ====================
+async function sendDiceAnimation(chatId, playerDice1, playerDice2, bankDice1, bankDice2) {
   try {
+    // Стакан (тряска)
     await bot.sendSticker(chatId, STICKERS.shake).catch(() => {});
-    await sleep(200);
+    await sleep(2000);
     
-    const playerSticker = getStickerForValue(playerSum);
-    if (playerSticker) {
-      await bot.sendSticker(chatId, playerSticker).catch(() => {});
+    // Стикер первого кубика игрока
+    const playerSticker1 = getStickerForValue(playerDice1);
+    if (playerSticker1) {
+      await bot.sendSticker(chatId, playerSticker1).catch(() => {});
     }
-    await sleep(200);
+    await sleep(500);
     
-    const bankSticker = getStickerForValue(bankSum);
-    if (bankSticker) {
-      await bot.sendSticker(chatId, bankSticker).catch(() => {});
+    // Стикер второго кубика игрока
+    const playerSticker2 = getStickerForValue(playerDice2);
+    if (playerSticker2) {
+      await bot.sendSticker(chatId, playerSticker2).catch(() => {});
+    }
+    await sleep(500);
+    
+    // Стикер первого кубика банка
+    const bankSticker1 = getStickerForValue(bankDice1);
+    if (bankSticker1) {
+      await bot.sendSticker(chatId, bankSticker1).catch(() => {});
+    }
+    await sleep(500);
+    
+    // Стикер второго кубика банка
+    const bankSticker2 = getStickerForValue(bankDice2);
+    if (bankSticker2) {
+      await bot.sendSticker(chatId, bankSticker2).catch(() => {});
     }
   } catch (e) {
     console.log('⚠️ Ошибка анимации стикеров:', e.message);
