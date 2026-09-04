@@ -122,6 +122,17 @@ const STICKERS = {
   roll5: 'CAACAgIAAxkBAAInwGqZV8fA9EG-KLn4NiX8Xa1qgSGhAAKJmwAC_tzISBupstx-GKRhPQQ',
   roll6: 'CAACAgIAAxkBAAInwmqZV9Wspp2zZQc-Jp9qem_iT6O6AAI5rwACHT_JSKmI5bIblXJZPQQ',
 };
+  // Новые стикеры (замени ID на реальные после создания)
+  bj_start: 'CAACAgIAAxkBAA...',  // Туз пик
+  bj_hit: 'CAACAgIAAxkBAA...',   // Джокер
+  bj_stand: 'CAACAgIAAxkBAA...', // Пиратский череп
+  duel_start: 'CAACAgIAAxkBAA...', // Скрещённые шпаги
+  duel_attack: 'CAACAgIAAxkBAA...', // Пират с саблей
+  duel_win: 'CAACAgIAAxkBAA...', // Пират с трофеем
+  vip_start: 'CAACAgIAAxkBAA...', // Галеон
+  vip_win: 'CAACAgIAAxkBAA...', // Корабль с золотом
+  vip_lose: 'CAACAgIAAxkBAA...', // Тонущий корабль
+};
 
 // ==================== ФОРМАТТЕР СООБЩЕНИЙ (БЕЗ ПОЛОС — ИСПРАВЛЕН) ====================
 function formatMessage(title, body, footer = '') {
@@ -1045,29 +1056,30 @@ function finishBlackjack(playerId) {
     addBalanceHistory(playerId, winAmount, 'Блэкджек проигрыш');
   }
   const balance = p.demoMode ? safeNumber(p.demoBalance) : safeNumber(p.balance);
-    const msg = `🎴 РЕЗУЛЬТАТ:\n\n` +
+// Расчёт бонусов
+const rankBonus = RANKS[p.rank]?.bonus || 0;
+const levelBonus = p.levelBonus || 0;
+const passiveBonus = p.passiveBonus || 0;
+const totalBonus = rankBonus + levelBonus + passiveBonus;
+const bonusText = totalBonus > 0 ? `\n📈 Бонусы: +${totalBonus}% (ранг ${rankBonus}% + уровень ${levelBonus}% + достижения ${passiveBonus}%)` : '';
+
+const msg = `🎴 РЕЗУЛЬТАТ:\n\n` +
     `Твоя рука: ${formatHand(playerHand)} (${playerValue} очков)\n` +
     `Дилер: ${formatHand(dealerHand)} (${dealerValue} очков)\n\n` +
     `${result}\n` +
-    `💰 ${winAmount > 0 ? '+' : ''}${winAmount} дуб.\n` +
+    `💰 ${winAmount > 0 ? '+' : ''}${winAmount} дуб.${bonusText}\n` +
     `📊 Баланс: ${balance} дуб.\n\n` +
     `${phrase}`;
-  bot.sendMessage(playerId, formatMessage('БЛЭКДЖЕК РЕЗУЛЬТАТ', msg), blackjackResultKeyboard());
-  delete blackjackGames[playerId];
-  // === ИСПРАВЛЕННАЯ ПРОВЕРКА ЗАДАНИЙ ===
-  const quests = checkDailyQuests(playerId);
-  if (quests && quests.length > 0) {
-    for (let q of quests) {
-      if (typeof q.condition === 'function' && q.condition(p) && !(p.dailyQuestsCompleted || []).includes(q.id)) {
-        const success = completeDailyQuest(playerId, q.id);
-        if (success) {
-          bot.sendMessage(playerId, formatMessage('📋 ЗАДАНИЕ ВЫПОЛНЕНО!', `✅ ${q.name}\n💰 +${q.reward} дуб.`));
-        }
-      }
+// Всегда показываем клавиатуру, независимо от исхода
+bot.sendMessage(playerId, formatMessage('БЛЭКДЖЕК РЕЗУЛЬТАТ', msg), {
+    reply_markup: {
+        inline_keyboard: [
+            [{ text: '🎴 Играть ещё', callback_data: 'mode_blackjack' }],
+            [{ text: '🏴‍☠️ Главное меню', callback_data: 'menu_main' }]
+        ]
     }
-  }
-}
-
+});
+  
 // ==================== ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ ====================
 let players = {};
 let bank = { pot: 2000, jackpot: 0, commission: 0, totalStakes: 0, roundActive: false, roundEnd: 0 };
@@ -3565,12 +3577,26 @@ if (data === 'menu_achievements') {
     } else {
       p.balance = safeNumber(p.balance) - amount;
     }
-    const playerDice = Math.floor(Math.random() * 6) + 1;
-    const playerDice2 = Math.floor(Math.random() * 6) + 1;
-    const playerSum = playerDice + playerDice2;
-    const bankDice = Math.floor(Math.random() * 6) + 1;
-    const bankDice2 = Math.floor(Math.random() * 6) + 1;
-    const bankSum = bankDice + bankDice2;
+    // Расчёт удачи
+  p.luck = (p.luck || 0) + (p.achievements?.length || 0) * 0.5 + (p.rank || 0) * 2 + (p.dailyStreak || 0) * 0.5;
+  p.luck = Math.min(p.luck, 30); // Максимум 30%
+
+  const playerDice = Math.floor(Math.random() * 6) + 1;
+  const playerDice2 = Math.floor(Math.random() * 6) + 1;
+  let playerSum = playerDice + playerDice2;
+
+  // Применяем бонус удачи (увеличиваем сумму на luck%)
+  const luckBonus = Math.floor(playerSum * (p.luck / 100));
+  playerSum += luckBonus;
+
+  const bankDice = Math.floor(Math.random() * 6) + 1;
+  const bankDice2 = Math.floor(Math.random() * 6) + 1;
+  let bankSum = bankDice + bankDice2;
+
+  // Банк тоже может получить удачу (случайно)
+  const bankLuck = Math.random() * 10; // 0-10%
+  const bankBonus = Math.floor(bankSum * (bankLuck / 100));
+  bankSum += bankBonus;
     
     // === ОТПРАВЛЯЕМ АНИМАЦИЮ ===
     await sendDiceAnimation(id, playerDice, playerDice2, bankDice, bankDice2);
