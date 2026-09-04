@@ -114,6 +114,7 @@ const BLACKJACK_CONFIG = {
 
 // ==================== ID СТИКЕРОВ (ТВОИ НОВЫЕ) ====================
 const STICKERS = {
+  // === КУБИКИ (уже были) ===
   shake: 'CAACAgIAAxkBAAImK2qVKnUC49DYyxXsx6dyew6BA-IaAAJZpwACXMqoSMYaDb3UizwwPQQ',
   roll1: 'CAACAgIAAxkBAAInuGqZV1jt7yPxhtyvG89wVBa4pRIBAAKkmgACmPnJSJMIIE1zY3ENPQQ',
   roll2: 'CAACAgIAAxkBAAInumqZV3Z8ubGqvZ91_wcphmiHbZOzAAKRwgACPWrJSDe-6CcYE1RMPQQ',
@@ -121,17 +122,34 @@ const STICKERS = {
   roll4: 'CAACAgIAAxkBAAInvmqZV7Y-aqaj3bmvAAFX8DMPZ5kpGAACFaIAAro9yUg9d5cZIhDpzz0E',
   roll5: 'CAACAgIAAxkBAAInwGqZV8fA9EG-KLn4NiX8Xa1qgSGhAAKJmwAC_tzISBupstx-GKRhPQQ',
   roll6: 'CAACAgIAAxkBAAInwmqZV9Wspp2zZQc-Jp9qem_iT6O6AAI5rwACHT_JSKmI5bIblXJZPQQ',
-};
-  // Новые стикеры (замени ID на реальные после создания)
-  bj_start: 'CAACAgIAAxkBAA...',  // Туз пик
-  bj_hit: 'CAACAgIAAxkBAA...',   // Джокер
-  bj_stand: 'CAACAgIAAxkBAA...', // Пиратский череп
-  duel_start: 'CAACAgIAAxkBAA...', // Скрещённые шпаги
-  duel_attack: 'CAACAgIAAxkBAA...', // Пират с саблей
-  duel_win: 'CAACAgIAAxkBAA...', // Пират с трофеем
-  vip_start: 'CAACAgIAAxkBAA...', // Галеон
-  vip_win: 'CAACAgIAAxkBAA...', // Корабль с золотом
-  vip_lose: 'CAACAgIAAxkBAA...', // Тонущий корабль
+
+  // === ПЕРСОНАЖИ (НОВЫЕ) ===
+  player_davy: 'CAACAgIAAxkBAAIqcWqa8QwcKXcHpE17-cZ2EfI00h8oAAJUqgAClZTZSGOyMsT3RnVPPQQ',
+  bank_jack: 'CAACAgIAAxkBAAIqc2qa8RDBZR_y5sg7uZ5bPGSsuoMWAAKfqQACSlDZSOtgw5gum9VnPQQ',
+  duel_player: 'CAACAgIAAxkBAAIqdWqa8RP9w71TkZkmNN-eMwFXoLtVAAIYmgAC_XjYSDDaBDe54ZnrPQQ',
+  duel_opponent: 'CAACAgIAAxkBAAIqd2qa8RQxPU-P3Ou0RTSTGBIpH51-AAKWrQAC9WvRSOYnEAnmr4-GPQQ',
+
+  // === BLACK JACK (НОВЫЕ) ===
+  bj_card_back: 'CAACAgIAAxkBAAIqeWqa8RWV9xIYxQNea6oNBpiTF6_FAAIdpAAChA3ZSK8nsEtYXdJhPQQ',
+  bj_card_A: 'CAACAgIAAxkBAAIqe2qa8RZzgAxCliGWJ1r2Sz4zMHvBAAItrwACmfrYSAR64OH0vH6hPQQ',
+  bj_card_K: 'CAACAgIAAxkBAAIqfWqa8RcPzt9SnT2VNXkpQpCjkVo8AAJHqwACSdzYSDbQ3itYkgRyPQQ',
+  bj_card_Q: 'CAACAgIAAxkBAAIqf2qa8RhIy7p_fIrjU2bDEHNqQmsPAAKtrQACSQvYSIZVLpM9hLlaPQQ',
+  bj_card_J: 'CAACAgIAAxkBAAIqgWqa8RmzSEF7Y4bej5TmdEhAmWezAAJNqQACMfjYSLCpk9hJ_NKCPQQ',
+  bj_card_10: 'CAACAgIAAxkBAAIqg2qa8Ro8HGm5XYhtsxCH5DqgeFj2AAJfpgACrrTYSAMt6lvr2ZIlPQQ',
+  bj_card_9: 'CAACAgIAAxkBAAIqhWqa8RtbN9Ud3sM8XrwP-nq2_07NAAKmqAACrf7ZSAX0q50aiCLiPQQ',
+  bj_card_8: 'CAACAgIAAxkBAAIqh2qa8RwSI8RlK5JT3fYjV12trjEzAALtsQACGJ3YSMcKRJ-_WlzuPQQ',
+  bj_card_7: 'CAACAgIAAxkBAAIqiWqa8RzatC5fXg3dx3hEIhW9E856AAJ_nAACWyTQSIWiaAIKXC0tPQQ',
+  bj_card_6: 'CAACAgIAAxkBAAIqi2qa8R27_0m_ForGMVica3B7uThsAAIRqwAC2PTZSFQEB3VAzOhjPQQ',
+  bj_card_5: 'CAACAgIAAxkBAAIqjWqa8R4ZWC4rxxF7DmhCk9LN2nWBAAKHpgACgyPZSCTnvRwRQ8GqPQQ',
+  bj_card_4: 'CAACAgIAAxkBAAIqj2qa8R-I6UC7oI2R9WmmhMUEjpUjAAKFnAAC2HXYSBCnbJCOnmJ0PQQ',
+  bj_card_3: 'CAACAgIAAxkBAAIqkWqa8SDNiwABvKbjbtYEz1wnTDkKvQAAqKgAAsDG2Ehmv2x1MOU5kT0E',
+  bj_card_2: 'CAACAgIAAxkBAAIqk2qa8SDTQM2Jcc9kUBKsO4D_WQLoAAL9ogACq7bYSCuwArLtkocwPQQ',
+
+  // === ОБЩИЕ (НОВЫЕ) ===
+  chest_win: 'CAACAgIAAxkBAAIqlWqa8SEwM5jv7xsE0O0nlGrDVE4EAALYpQACcBjYSLplWKPCYm3kPQQ',
+  chest_lose: 'CAACAgIAAxkBAAIql2qa8SIUKY_6AqNY0ONpGfweNtj0AALSpwACbC7ZSCPbCp1y8hjPPQQ',
+  achievement: 'CAACAgIAAxkBAAIqmWqa8SMQjZRD5pYeJET2E6Rf3T5uAAIoogAC6W_ZSJsQlrhTFXT1PQQ',
+  tournament: 'CAACAgIAAxkBAAIqm2qa8SSCI22c1FNRlFMR8-t_vu-mAAKypwACmJfYSFGJXhEd3yF4PQQ',
 };
 
 // ==================== ФОРМАТТЕР СООБЩЕНИЙ (БЕЗ ПОЛОС — ИСПРАВЛЕН) ====================
@@ -1638,6 +1656,55 @@ async function sendDiceAnimation(chatId, playerDice1, playerDice2, bankDice1, ba
     console.log('⚠️ Ошибка анимации стикеров:', e.message);
   }
 }
+
+  // ==================== АНИМАЦИЯ БЛЭКДЖЕК (РАЗДАЧА КАРТ) ====================
+async function sendBlackjackAnimation(chatId, playerCard1, playerCard2, dealerCard1, dealerCard2) {
+  try {
+    // 1. Пауза 1 секунда (игрок видит сообщение о ставке)
+    await sleep(1000);
+    
+    // 2. Две карты игрока (одновременно)
+    const pCard1 = getCardSticker(playerCard1);
+    const pCard2 = getCardSticker(playerCard2);
+    if (pCard1) await bot.sendSticker(chatId, pCard1).catch(() => {});
+    if (pCard2) await bot.sendSticker(chatId, pCard2).catch(() => {});
+    await sleep(1000); // 1 секунда — игрок видит свои карты
+    
+    // 3. Первая карта дилера (открытая)
+    const dCard1 = getCardSticker(dealerCard1);
+    if (dCard1) await bot.sendSticker(chatId, dCard1).catch(() => {});
+    await sleep(500); // 0.5 секунды
+    
+    // 4. Вторая карта дилера (закрытая — рубашка)
+    await bot.sendSticker(chatId, STICKERS.bj_card_back).catch(() => {});
+    await sleep(500); // 0.5 секунды
+    
+  } catch (e) {
+    console.log('⚠️ Ошибка анимации блэкджека:', e.message);
+  }
+}
+
+// ==================== ПОЛУЧЕНИЕ СТИКЕРА КАРТЫ ====================
+function getCardSticker(card) {
+  const rank = card.rank;
+  const map = {
+    'A': STICKERS.bj_card_A,
+    'K': STICKERS.bj_card_K,
+    'Q': STICKERS.bj_card_Q,
+    'J': STICKERS.bj_card_J,
+    '10': STICKERS.bj_card_10,
+    '9': STICKERS.bj_card_9,
+    '8': STICKERS.bj_card_8,
+    '7': STICKERS.bj_card_7,
+    '6': STICKERS.bj_card_6,
+    '5': STICKERS.bj_card_5,
+    '4': STICKERS.bj_card_4,
+    '3': STICKERS.bj_card_3,
+    '2': STICKERS.bj_card_2,
+  };
+  return map[rank] || null;
+}
+  
 function getStickerForValue(value) {
   const map = {
     1: STICKERS.roll1,
@@ -1895,6 +1962,11 @@ function processDuel(challengerId, opponentId, amount) {
   let roundResults = [];
   const challengerBet = amount;
   const opponentBet = amount;
+  
+  // Показываем персонажей в дуэли
+  bot.sendSticker(challengerId, STICKERS.duel_player).catch(() => {});
+  bot.sendSticker(opponentId, STICKERS.duel_opponent).catch(() => {});
+  sleep(1000);
   while (round < 5 && !winnerId) {
     round++;
     const d1 = Math.floor(Math.random() * 6) + 1;
@@ -3598,8 +3670,14 @@ if (data === 'menu_achievements') {
   const bankBonus = Math.floor(bankSum * (bankLuck / 100));
   bankSum += bankBonus;
     
-    // === ОТПРАВЛЯЕМ АНИМАЦИЮ ===
-    await sendDiceAnimation(id, playerDice, playerDice2, bankDice, bankDice2);
+  // Показываем персонажей перед броском
+  await bot.sendSticker(id, STICKERS.player_davy);
+  await sleep(500);
+  await bot.sendSticker(id, STICKERS.bank_jack);
+  await sleep(500);
+
+  // === ОТПРАВЛЯЕМ АНИМАЦИЮ ===
+  await sendDiceAnimation(id, playerDice, playerDice2, bankDice, bankDice2);
     
     // === ДАЛЬШЕ ИДЁТ РЕЗУЛЬТАТ ===
     let winAmount = 0;
@@ -4385,7 +4463,13 @@ bot.on('message', async (msg) => {
       const adminDice = Math.floor(Math.random() * 6) + 1;
       const adminDice2 = Math.floor(Math.random() * 6) + 1;
       const adminSum = adminDice + adminDice2;
-      await sendDiceAnimation(id, playerDice, playerDice2, adminDice, adminDice2);
+      // Показываем персонажей перед броском
+    await bot.sendSticker(id, STICKERS.player_davy);
+    await sleep(500);
+    await bot.sendSticker(id, STICKERS.bank_jack);
+    await sleep(500);
+
+    await sendDiceAnimation(id, playerDice, playerDice2, adminDice, adminDice2);
       let winAmount = 0;
       if (playerSum > adminSum) {
         winAmount = amount * 3;
@@ -4480,6 +4564,10 @@ bot.on('message', async (msg) => {
       const game = blackjackGames[id];
       game.playerHand = [deck.pop(), deck.pop()];
       game.dealerHand = [deck.pop(), deck.pop()];
+
+      // Анимация раздачи карт
+      await sendBlackjackAnimation(id, game.playerHand[0], game.playerHand[1], game.dealerHand[0], game.dealerHand[1]);
+
       const playerValue = getHandValue(game.playerHand);
       const dealerValue = getHandValue(game.dealerHand);
       if (isBlackjack(game.playerHand) && !isBlackjack(game.dealerHand)) {
