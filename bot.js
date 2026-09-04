@@ -1586,12 +1586,10 @@ async function sendBlackjackAnimation(chatId, playerCard1, playerCard2, dealerCa
     // 4. Вторая карта дилера (закрытая — рубашка)
     await bot.sendSticker(chatId, STICKERS.bj_card_back).catch(() => {});
     await sleep(500); // 0.5 секунды
-    
-  } catch (e) {
+    }catch (e) {
     console.log('⚠️ Ошибка анимации блэкджека:', e.message);
   }
 }
-
 // ==================== ПОЛУЧЕНИЕ СТИКЕРА КАРТЫ ====================
 function getCardSticker(card) {
   const rank = card.rank;
