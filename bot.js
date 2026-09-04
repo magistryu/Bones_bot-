@@ -3375,25 +3375,25 @@ if (data === 'profile_games') {
       }
     }
 
-    const target = getJackpotTarget();
-    const bar = getJackpotBar();
-    let phrase = '';
-    let resultTitle = '';
-    let resultEmoji = '';
-    if (winAmount > 0) {
-      phrase = WIN_PHRASES[Math.floor(Math.random() * WIN_PHRASES.length)];
-      resultTitle = 'ПОБЕДА!';
-      resultEmoji = '✅';
-    } else if (winAmount < 0) {
-      phrase = LOSE_PHRASES[Math.floor(Math.random() * LOSE_PHRASES.length)];
-      resultTitle = 'ПОРАЖЕНИЕ!';
-      resultEmoji = '❌';
-    } else {
-      phrase = DRAW_PHRASES[Math.floor(Math.random() * DRAW_PHRASES.length)];
-      resultTitle = 'НИЧЬЯ!';
-      resultEmoji = '🤝';
-    }
+const target = getJackpotTarget();
+const bar = getJackpotBar();
+let phrase = '';
+let resultTitle = '';
+let resultEmoji = '';
 
+if (playerSum > bankSum) {
+  phrase = WIN_PHRASES[Math.floor(Math.random() * WIN_PHRASES.length)];
+  resultTitle = 'ПОБЕДА!';
+  resultEmoji = '✅';
+} else if (playerSum < bankSum) {
+  phrase = LOSE_PHRASES[Math.floor(Math.random() * LOSE_PHRASES.length)];
+  resultTitle = 'ПОРАЖЕНИЕ!';
+  resultEmoji = '❌';
+} else {
+  phrase = DRAW_PHRASES[Math.floor(Math.random() * DRAW_PHRASES.length)];
+  resultTitle = 'НИЧЬЯ!';
+  resultEmoji = '🤝';
+}
     const playerDice1Emoji = getDiceEmoji(playerDice);
     const playerDice2Emoji = getDiceEmoji(playerDice2);
     const bankDice1Emoji = getDiceEmoji(bankDice);
