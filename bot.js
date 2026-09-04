@@ -4070,7 +4070,7 @@ if (data === 'menu_achievements') {
     return;
   }
 });
-
+  
 // ==================== ОБРАБОТЧИК ТЕКСТОВЫХ СООБЩЕНИЙ (ПОЛНЫЙ) ====================
 bot.on('message', async (msg) => {
   if (msg.sticker) {
