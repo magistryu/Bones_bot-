@@ -1857,6 +1857,57 @@ function processDuel(challengerId, opponentId, amount) {
     } else {
       challenger.balance = safeNumber(challenger.balance) + challengerBet;
     }
+
+    // ==================== ДУЭЛИ ====================
+function processDuel(challengerId, opponentId, amount) {
+  const challenger = getPlayer(challengerId);
+  const opponent = getPlayer(opponentId);
+  let round = 0;
+  let winnerId = null;
+  let roundResults = [];
+  const challengerBet = amount;
+  const opponentBet = amount;
+  
+  // Горизонтальная анимация: игрок VS соперник
+  // 1. Стикер первого игрока (левый)
+  bot.sendSticker(challengerId, STICKERS.duel_player).catch(() => {});
+  bot.sendSticker(opponentId, STICKERS.duel_opponent).catch(() => {});
+  sleep(500);
+  
+  // 2. Сообщение VS по центру
+  bot.sendMessage(challengerId, formatMessage('⚔️ VS ⚔️', ''));
+  bot.sendMessage(opponentId, formatMessage('⚔️ VS ⚔️', ''));
+  sleep(500);
+  
+  // 3. Стикер второго игрока (правый)
+  bot.sendSticker(challengerId, STICKERS.duel_opponent).catch(() => {});
+  bot.sendSticker(opponentId, STICKERS.duel_player).catch(() => {});
+  sleep(1500);
+  
+  while (round < 5 && !winnerId) {
+    round++;
+    const d1 = Math.floor(Math.random() * 6) + 1;
+    const d2 = Math.floor(Math.random() * 6) + 1;
+    const sum1 = d1 + d2;
+    const d3 = Math.floor(Math.random() * 6) + 1;
+    const d4 = Math.floor(Math.random() * 6) + 1;
+    const sum2 = d3 + d4;
+    bot.sendMessage(challengerId, formatMessage('ДУЭЛЬ РАУНД ' + round, `${d1}+${d2}=${sum1}`));
+    bot.sendMessage(opponentId, formatMessage('ДУЭЛЬ РАУНД ' + round, `${d3}+${d4}=${sum2}`));
+    roundResults.push({ round, challengerSum: sum1, opponentSum: sum2 });
+    if (sum1 > sum2) {
+      winnerId = challengerId;
+    } else if (sum2 > sum1) {
+      winnerId = opponentId;
+    }
+  }
+  
+  if (!winnerId) {
+    if (challenger.demoMode) {
+      challenger.demoBalance = safeNumber(challenger.demoBalance) + challengerBet;
+    } else {
+      challenger.balance = safeNumber(challenger.balance) + challengerBet;
+    }
     if (opponent.demoMode) {
       opponent.demoBalance = safeNumber(opponent.demoBalance) + opponentBet;
     } else {
