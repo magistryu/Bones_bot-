@@ -4362,13 +4362,16 @@ bot.on('message', async (msg) => {
       const adminDice2 = Math.floor(Math.random() * 6) + 1;
       const adminSum = adminDice + adminDice2;
       
+      // Показываем персонажей перед броском (горизонтально: Дейви Джонс VS Джек Воробей)
       await bot.sendSticker(id, STICKERS.player_davy);
       await sleep(500);
-      await bot.sendSticker(id, STICKERS.bank_jack);
+      await bot.sendMessage(id, formatMessage('⚔️ VS ⚔️', ''));
       await sleep(500);
+      await bot.sendSticker(id, STICKERS.bank_jack);
+      await sleep(1000);
 
       await sendDiceAnimation(id, playerDice, playerDice2, adminDice, adminDice2);
-      
+
       let winAmount = 0;
       if (playerSum > adminSum) {
         winAmount = amount * 3;
