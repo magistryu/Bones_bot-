@@ -3567,10 +3567,15 @@ bot.on('callback_query', async (query) => {
     const bankBonus = Math.floor(bankSum * (bankLuck / 100));
     bankSum += bankBonus;
     
+    // Показываем персонажей перед броском (горизонтально: Дейви Джонс VS Джек Воробей)
     await bot.sendSticker(id, STICKERS.player_davy);
     await sleep(500);
-    await bot.sendSticker(id, STICKERS.bank_jack);
+    await bot.sendMessage(id, formatMessage('⚔️ VS ⚔️', ''));
     await sleep(500);
+    await bot.sendSticker(id, STICKERS.bank_jack);
+    await sleep(1000);
+
+    // === ОТПРАВЛЯЕМ АНИМАЦИЮ ===
 
     await sendDiceAnimation(id, playerDice, playerDice2, bankDice, bankDice2);
     
