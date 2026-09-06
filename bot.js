@@ -101,10 +101,46 @@ const MAX_VIP_BET = 5000;
 const MIN_DUEL_MONEY = 100;
 const MAX_DUEL_MONEY = 10000;
 
+// ==================== ЧАСТЬ 1: СИСТЕМА ДОСТУПА И ЛИМИТЫ ====================
+
+// 1.1 и 1.7: Три уровня доступа + Цены на Legendary
+const LEGENDARY_PRICES = {
+  month: 599,
+  threeMonths: 1500,
+  sixMonths: 2500,
+  year: 4000
+};
+
+// 1.3 и 1.4: Лимиты для FREE и PREMIUM
+const FREE_LIMITS = {
+  classic: 15,
+  blackjack: 3,
+  duel: 2,
+  chest: 3,
+  vip: 0
+};
+
+const PREMIUM_LIMITS = {
+  classic: 150,
+  blackjack: 50,
+  duel: 30,
+  chest: 30,
+  vip: 15
+};
+
+// Стоимость энергии для разных режимов
+const ENERGY_COST = {
+  classic: 1,
+  blackjack: 2,
+  duel: 2,
+  vip: 3,
+  chest: 1
+};
+
 // ==================== БЛЭКДЖЕК ====================
 const BLACKJACK_CONFIG = {
   decks: 6,
-  maxBet: 1000000000, // ИСПРАВЛЕНО: было 10000, теперь 1 млрд
+  maxBet: 1000000000,
   minBet: 10
 };
 
@@ -959,8 +995,8 @@ function finishBlackjack(playerId) {
   } else {
     phrase = DRAW_PHRASES[Math.floor(Math.random() * DRAW_PHRASES.length)];
   }
-  
-  const bjResult = winAmount > 0 ? 'win' : (winAmount < 0 ? 'lose' : 'draw');
+
+const bjResult = winAmount > 0 ? 'win' : (winAmount < 0 ? 'lose' : 'draw');
   
   if (winAmount > 0) {
     if (p.demoMode) {
@@ -978,7 +1014,6 @@ function finishBlackjack(playerId) {
     addBalanceHistory(playerId, 0, 'Блэкджек ничья');
   }
   
-  // Обновляем статистику и проверяем задания
   updateDailyStats(playerId, 'blackjack', bjResult, game.bet);
   
   const balance = p.demoMode ? safeNumber(p.demoBalance) : safeNumber(p.balance);
@@ -1004,7 +1039,6 @@ function finishBlackjack(playerId) {
     }
   });
   
-  // Удаляем игру
   delete blackjackGames[playerId];
   saveData();
 }
@@ -1123,9 +1157,100 @@ function safeNumber(val) {
   return Math.floor(num);
 }
 
+// ==================== ЧАСТЬ 1: ФУНКЦИИ ДОСТУПА ====================
+
+// 1.2: Проверка Telegram Premium
+async function checkTelegramPremium(userId) {
+  try {
+    const chatMember = await bot.getChatMember(userId, userId);
+    return chatMember.status === 'premium' || 
+           chatMember.status === 'creator' || 
+           chatMember.status === 'administrator';
+  } catch (e) {
+    return false;
+  }
+}
+
+// 1.5 и 1.6: Проверка лимитов + энергии (Legendary безлимит)
+function checkLimit(id, gameType) {
+  const p = getPlayer(id);
+  if (!p) return { allowed: false, reason: 'Игрок не найден' };
+  
+  // Legendary — безлимит
+  if (p.tier === 'legendary') {
+    // Проверяем энергию
+    refillEnergy(p);
+    if (p.energy < ENERGY_COST[gameType]) {
+      return { allowed: false, reason: `❌ Не хватает энергии! Нужно ${ENERGY_COST[gameType]}, у тебя ${p.energy}.` };
+    }
+    return { allowed: true };
+  }
+  
+  // Проверяем энергию
+  refillEnergy(p);
+  if (p.energy < ENERGY_COST[gameType]) {
+    return { allowed: false, reason: `❌ Не хватает энергии! Нужно ${ENERGY_COST[gameType]}, у тебя ${p.energy}. Восстановление: 1/час.` };
+  }
+  
+  const today = new Date().toDateString();
+  const limits = p.tier === 'premium' ? PREMIUM_LIMITS : FREE_LIMITS;
+  
+  // Инициализация счётчиков
+  if (!p.dailyCounters) {
+    p.dailyCounters = { date: today, games: {} };
+  }
+  if (p.dailyCounters.date !== today) {
+    p.dailyCounters = { date: today, games: {} };
+  }
+  
+  const used = p.dailyCounters.games[gameType] || 0;
+  const max = limits[gameType] || 0;
+  
+  if (max === 0) {
+    return { allowed: false, reason: '❌ Этот режим недоступен для твоего уровня доступа.' };
+  }
+  if (used >= max) {
+    const timeLeft = 24 - new Date().getHours();
+    return { allowed: false, reason: `❌ Лимит исчерпан! Сегодня осталось ${max - used} игр. Обновится через ${timeLeft} ч.` };
+  }
+  
+  return { allowed: true };
+}
+
+// 1.6: Восстановление энергии
+function refillEnergy(p) {
+  const now = Date.now();
+  const hours = Math.floor((now - (p.lastEnergyRefill || now)) / 3600000);
+  if (hours > 0) {
+    p.energy = Math.min(p.maxEnergy || 10, (p.energy || 10) + hours);
+    p.lastEnergyRefill = now;
+    saveData();
+  }
+}
+
+// 1.6: Обновление maxEnergy в зависимости от tier
+function updateMaxEnergy(p) {
+  if (p.tier === 'legendary') p.maxEnergy = 50;
+  else if (p.tier === 'premium') p.maxEnergy = 25;
+  else p.maxEnergy = 10;
+  
+  // Если текущая энергия больше нового максимума — обрезаем
+  if (p.energy > p.maxEnergy) p.energy = p.maxEnergy;
+  saveData();
+}
+
 function getPlayer(id) {
   if (!players[id]) {
     players[id] = {
+      // ЧАСТЬ 1: Новые поля
+      tier: 'free',          // 1.1: Три уровня доступа
+      tierExpiry: 0,          // 1.1: Время окончания Legendary
+      energy: 10,             // 1.6: Текущая энергия
+      maxEnergy: 10,          // 1.6: Максимум энергии
+      lastEnergyRefill: Date.now(), // 1.6: Время последнего восполнения
+      dailyCounters: { date: new Date().toDateString(), games: {} }, // 1.3: Счётчики лимитов
+      
+      // Старые поля
       chestStats: { opened: 0, wins: 0, losses: 0, maxWin: 0 },
       balance: 10,
       demoBalance: 50,
@@ -1251,7 +1376,6 @@ function updateDailyStats(id, gameType, result, betAmount) {
   
   const today = new Date().toDateString();
   
-  // Обновляем даты, если новый день
   if (p.gamesDate !== today) {
     p.gamesToday = 0;
     p.gamesDate = today;
@@ -1277,7 +1401,6 @@ function updateDailyStats(id, gameType, result, betAmount) {
     p.chestsDate = today;
   }
   
-  // Обновляем счётчики
   p.games = (p.games || 0) + 1;
   p.gamesToday = (p.gamesToday || 0) + 1;
   
@@ -1302,7 +1425,6 @@ function updateDailyStats(id, gameType, result, betAmount) {
   
   saveData();
   
-  // Проверяем задания ПОСЛЕ обновления статистики
   const quests = checkDailyQuests(id);
   if (quests) {
     for (let q of quests) {
@@ -1933,7 +2055,7 @@ function processDuel(challengerId, opponentId, amount) {
     return;
   }
 
-  const loserId = winnerId === challengerId ? opponentId : challengerId;
+const loserId = winnerId === challengerId ? opponentId : challengerId;
   const totalPot = amount * 2;
   const comm = Math.floor(totalPot * 0.1);
   bank.commission = safeNumber(bank.commission) + comm;
@@ -1971,7 +2093,6 @@ function processDuel(challengerId, opponentId, amount) {
   bot.sendMessage(challengerId, formatMessage('ДУЭЛЬ ЗАВЕРШЕНА', resultMsg), { reply_markup: duelResultKeyboard() });
   bot.sendMessage(opponentId, formatMessage('ДУЭЛЬ ЗАВЕРШЕНА', resultMsg), { reply_markup: duelResultKeyboard() });
   
-  // Обновляем статистику для обоих игроков
   const challengerResult = winnerId === challengerId ? 'win' : 'lose';
   const opponentResult = winnerId === opponentId ? 'win' : 'lose';
   updateDailyStats(challengerId, 'duel', challengerResult, amount);
@@ -2423,6 +2544,27 @@ bot.onText(/\/start/, async (msg) => {
     if (!p) return;
     p.username = msg.from.username || 'noname';
     collectPassiveIncome(id);
+    
+    // ЧАСТЬ 1: Проверяем Telegram Premium при старте
+    const isPremium = await checkTelegramPremium(id);
+    if (isPremium && p.tier === 'free') {
+      p.tier = 'premium';
+      updateMaxEnergy(p);
+      saveData();
+    }
+    
+    // ЧАСТЬ 1: Проверяем истечение Legendary
+    if (p.tier === 'legendary' && p.tierExpiry && p.tierExpiry < Date.now()) {
+      p.tier = 'free';
+      p.tierExpiry = 0;
+      updateMaxEnergy(p);
+      saveData();
+      bot.sendMessage(id, formatMessage('⏰ LEGENDARY ЗАКОНЧИЛСЯ', 'Твой Legendary-доступ истёк. Ты возвращён на бесплатный уровень.'));
+    }
+    
+    // ЧАСТЬ 1: Восстанавливаем энергию
+    refillEnergy(p);
+    
     if (p.demoMode && p.demoDate !== new Date().toDateString()) {
       p.demoBalance = 50;
       p.demoRollsToday = 0;
@@ -2471,6 +2613,11 @@ bot.onText(/\/start/, async (msg) => {
     const balance = p.demoMode ? safeNumber(p.demoBalance) : safeNumber(p.balance);
     const target = getJackpotTarget();
     const bar = getJackpotBar();
+    
+    // ЧАСТЬ 1: Добавляем информацию о тире и энергии
+    const tierEmoji = p.tier === 'legendary' ? '👑' : (p.tier === 'premium' ? '⭐' : '🆓');
+    const tierLabel = p.tier === 'legendary' ? 'Легендарный' : (p.tier === 'premium' ? 'Премиум' : 'Бесплатный');
+    
     bot.sendMessage(id,
       formatMessage(
         '🏴‍☠️ ЧЁРНАЯ КОСТЬ',
@@ -2481,7 +2628,9 @@ bot.onText(/\/start/, async (msg) => {
         `🏦 Банк: ${safeNumber(bank.pot)} дуб.\n` +
         `🎯 Прогресс джекпота: ${jackpotCounter}/${target}\n` +
         `🟩 ${bar}\n` +
-        `💨 Пассивный доход: ${rank.passive} дуб./час`
+        `💨 Пассивный доход: ${rank.passive} дуб./час\n` +
+        `⚡ Энергия: ${p.energy}/${p.maxEnergy}\n` +
+        `👑 Уровень доступа: ${tierEmoji} ${tierLabel}`
       ),
       {
         reply_markup: mainInlineKeyboard()
@@ -2572,18 +2721,29 @@ bot.on('callback_query', async (query) => {
   // ==================== ГЛАВНОЕ МЕНЮ ====================
 if (data === 'menu_main') {
   collectPassiveIncome(id);
+  // ЧАСТЬ 1: Проверяем Premium и восстанавливаем энергию
+  const isPremium = await checkTelegramPremium(id);
+  if (isPremium && p.tier === 'free') {
+    p.tier = 'premium';
+    updateMaxEnergy(p);
+    saveData();
+  }
+  refillEnergy(p);
+  
   const rank = RANKS[p.rank];
   const balance = p.demoMode ? safeNumber(p.demoBalance) : safeNumber(p.balance);
   const target = getJackpotTarget();
   const bar = getJackpotBar();
   
-  // Расчёт активных игроков (последние 5 минут)
   const now = Date.now();
   const activePlayers = Object.keys(players).filter(pid => {
     const p2 = players[pid];
     return p2 && p2.lastActivity && (now - p2.lastActivity) < 5 * 60 * 1000;
   });
   const activeCount = activePlayers.length;
+
+  const tierEmoji = p.tier === 'legendary' ? '👑' : (p.tier === 'premium' ? '⭐' : '🆓');
+  const tierLabel = p.tier === 'legendary' ? 'Легендарный' : (p.tier === 'premium' ? 'Премиум' : 'Бесплатный');
   
   bot.sendMessage(id,
     formatMessage(
@@ -2594,7 +2754,9 @@ if (data === 'menu_main') {
       `🎰 Джекпот: ${safeNumber(bank.jackpot)}\n` +
       `🎯 ${jackpotCounter}/${target}\n` +
       `🟩 ${bar}\n` +
-      `👥 Активных: ${activeCount} пиратов`
+      `👥 Активных: ${activeCount} пиратов\n` +
+      `⚡ Энергия: ${p.energy}/${p.maxEnergy}\n` +
+      `👑 ${tierEmoji} ${tierLabel}`
     ),
     {
       reply_markup: mainInlineKeyboard()
@@ -2622,6 +2784,12 @@ if (data === 'menu_play') {
   if (data === 'mode_classic') {
     p.currentMode = 'classic';
     collectPassiveIncome(id);
+    // ЧАСТЬ 1: Проверяем лимиты перед выбором ставки
+    const limitCheck = checkLimit(id, 'classic');
+    if (!limitCheck.allowed) {
+      bot.sendMessage(id, formatMessage('КЛАССИКА', limitCheck.reason), { reply_markup: backKeyboard() });
+      return;
+    }
     bot.sendMessage(id, formatMessage('🎲 КЛАССИКА', 'Введи сумму ставки:'), {
       reply_markup: inputBetKeyboard()
     });
@@ -2629,6 +2797,14 @@ if (data === 'menu_play') {
   }
 
   if (data === 'mode_duel') {
+    // ЧАСТЬ 1: Проверяем доступность дуэлей для FREE
+    if (p.tier === 'free') {
+      const limitCheck = checkLimit(id, 'duel');
+      if (!limitCheck.allowed) {
+        bot.sendMessage(id, formatMessage('ДУЭЛЬ', limitCheck.reason), { reply_markup: backKeyboard() });
+        return;
+      }
+    }
     p.currentMode = 'duel';
     collectPassiveIncome(id);
     bot.sendMessage(id, formatMessage('⚔️ ДУЭЛЬ', `Введи сумму ставки (мин ${MIN_DUEL_MONEY}):`), {
@@ -2638,6 +2814,14 @@ if (data === 'menu_play') {
   }
 
   if (data === 'mode_vip') {
+    // ЧАСТЬ 1: Проверяем доступность VIP для FREE
+    if (p.tier === 'free') {
+      const limitCheck = checkLimit(id, 'vip');
+      if (!limitCheck.allowed) {
+        bot.sendMessage(id, formatMessage('VIP', limitCheck.reason), { reply_markup: backKeyboard() });
+        return;
+      }
+    }
     if (p.demoMode) {
       bot.sendMessage(id, formatMessage('VIP', '❌ VIP-игра недоступна в демо-режиме.'), { reply_markup: backKeyboard() });
       return;
@@ -2651,6 +2835,14 @@ if (data === 'menu_play') {
   }
 
   if (data === 'mode_blackjack') {
+    // ЧАСТЬ 1: Проверяем доступность блэкджека для FREE
+    if (p.tier === 'free') {
+      const limitCheck = checkLimit(id, 'blackjack');
+      if (!limitCheck.allowed) {
+        bot.sendMessage(id, formatMessage('БЛЭКДЖЕК', limitCheck.reason), { reply_markup: backKeyboard() });
+        return;
+      }
+    }
     if (blackjackGames[id]) {
       bot.sendMessage(id, formatMessage('БЛЭКДЖЕК', '❌ У тебя уже есть активная игра в блэкджек!'));
       return;
@@ -2681,11 +2873,27 @@ if (data === 'menu_play') {
     const fleetIncome = calculateTotalIncome(p);
     const fleetBonus = getFleetBonus(p);
 
+    // ЧАСТЬ 1: Добавляем информацию о тире и лимитах в профиль
+    const tierEmoji = p.tier === 'legendary' ? '👑' : (p.tier === 'premium' ? '⭐' : '🆓');
+    const tierLabel = p.tier === 'legendary' ? 'Легендарный' : (p.tier === 'premium' ? 'Премиум' : 'Бесплатный');
+    
+    let limitsInfo = '';
+    if (p.tier === 'free') {
+      limitsInfo = `📊 Лимиты: классика ${FREE_LIMITS.classic}/день, блэкджек ${FREE_LIMITS.blackjack}/день, дуэли ${FREE_LIMITS.duel}/день`;
+    } else if (p.tier === 'premium') {
+      limitsInfo = `📊 Лимиты: классика ${PREMIUM_LIMITS.classic}/день, блэкджек ${PREMIUM_LIMITS.blackjack}/день, дуэли ${PREMIUM_LIMITS.duel}/день, VIP ${PREMIUM_LIMITS.vip}/день`;
+    } else {
+      limitsInfo = '👑 Все ограничения сняты!';
+    }
+
     let msg = `👤 ПРОФИЛЬ\n\n` +
       `🏴‍☠️ Флаг: ${p.flag || '🏴‍☠️'}\n` +
       `🏴‍☠️ Имя: @${p.username || 'unknown'}\n` +
       `💰 Баланс: ${balance} дуб.\n` +
       `🏆 Ранг: ${rank.emoji} ${rank.name}\n` +
+      `👑 Уровень доступа: ${tierEmoji} ${tierLabel}\n` +
+      `⚡ Энергия: ${p.energy}/${p.maxEnergy}\n` +
+      `${limitsInfo}\n` +
       `📈 Победы: ${wins}\n` +
       `📉 Поражения: ${losses}\n` +
       `📊 Винрейт: ${winrate}%\n` +
@@ -2816,7 +3024,7 @@ if (data === 'profile_games') {
     return;
   }
 
-         // ==================== БАНК ====================
+                // ==================== БАНК ====================
   if (data === 'menu_bank') {
     const totalShares = Object.values(players).reduce((sum, p) => sum + (p.share || 0), 0);
     const target = getJackpotTarget();
@@ -3050,6 +3258,12 @@ if (data === 'menu_achievements') {
 
          // ==================== СУНДУКИ ====================
   if (data === 'menu_chest') {
+    // ЧАСТЬ 1: Проверяем лимиты на сундуки
+    const limitCheck = checkLimit(id, 'chest');
+    if (!limitCheck.allowed) {
+      bot.sendMessage(id, formatMessage('СУНДУК', limitCheck.reason), { reply_markup: backKeyboard() });
+      return;
+    }
     bot.sendMessage(id, formatMessage(
       '🎁 СУНДУК ПИРАТА',
       'Выбери сундук для открытия:\n\n🆓 Бесплатный — 0 дуб. (3/день, 1-100 дуб.)\n🪵 Деревянный — 50 дуб. (шанс 90%, x2)\n⚓ Медный — 200 дуб. (шанс 70%, x3)\n🏴‍☠️ Железный — 500 дуб. (шанс 50%, x5)\n🔥 Золотой — 1000 дуб. (шанс 30%, x10)\n💎 Алмазный — 5000 дуб. (шанс 10%, x50)\n👑 Королевский — 10000 дуб. (шанс 5%, x100)'
@@ -3060,6 +3274,21 @@ if (data === 'menu_achievements') {
   }
 
   if (data === 'chest_free' || data === 'chest_wood' || data === 'chest_copper' || data === 'chest_iron' || data === 'chest_gold' || data === 'chest_diamond' || data === 'chest_royal') {
+    // ЧАСТЬ 1: Проверяем лимиты и энергию перед открытием
+    const limitCheck = checkLimit(id, 'chest');
+    if (!limitCheck.allowed) {
+      bot.sendMessage(id, formatMessage('СУНДУК', limitCheck.reason), { reply_markup: backKeyboard() });
+      return;
+    }
+    
+    // Тратим энергию
+    refillEnergy(p);
+    if (p.energy < ENERGY_COST.chest) {
+      bot.sendMessage(id, formatMessage('СУНДУК', `❌ Не хватает энергии! Нужно ${ENERGY_COST.chest}, у тебя ${p.energy}.`), { reply_markup: backKeyboard() });
+      return;
+    }
+    p.energy -= ENERGY_COST.chest;
+    
     if (p.chestCooldown && p.chestCooldown > Date.now()) {
       const timeLeft = Math.ceil((p.chestCooldown - Date.now()) / 1000);
       bot.sendMessage(id, formatMessage('СУНДУК', `⏳ Подожди ${timeLeft} секунд перед следующим открытием.`));
@@ -3089,9 +3318,9 @@ if (data === 'menu_achievements') {
         bot.sendMessage(id, formatMessage('СУНДУК', '❌ Ты уже открыл 3 бесплатных сундука сегодня. Завтра будет новый лимит.'));
         return;
       }
-    }
+      }
 
-    const balance = p.demoMode ? safeNumber(p.demoBalance) : safeNumber(p.balance);
+  const balance = p.demoMode ? safeNumber(p.demoBalance) : safeNumber(p.balance);
     if (chest.cost > 0 && balance < chest.cost) {
       bot.sendMessage(id, formatMessage('СУНДУК', `❌ Не хватает ${chest.cost} дуб. У тебя ${balance} дуб.`));
       return;
@@ -3114,7 +3343,6 @@ if (data === 'menu_achievements') {
       p.freeChestToday++;
     } else {
       if (roll <= chest.chance) {
-        // Рандомный выигрыш в диапазоне min-max (кроме бесплатного)
         winAmount = Math.floor(Math.random() * (chest.max - chest.min + 1)) + chest.min;
         isWin = true;
       } else {
@@ -3132,7 +3360,6 @@ if (data === 'menu_achievements') {
       p.chestStats.losses++;
     }
     
-    // Обновляем счётчик открытых сундуков за сегодня
     const today = new Date().toDateString();
     if (p.chestsDate !== today) {
       p.chestsToday = 0;
@@ -3402,7 +3629,7 @@ if (data === 'menu_achievements') {
     return;
   }
 
-  if (data === 'tournament_join') {
+       if (data === 'tournament_join') {
     if (!tournaments.active) {
       bot.sendMessage(id, formatMessage('ТУРНИР', '⏳ Турнир не активен.'), { reply_markup: backKeyboard() });
       return;
@@ -3583,6 +3810,25 @@ if (data === 'menu_achievements') {
       bot.sendMessage(id, formatMessage('КЛАССИКА', '❌ Ставка не найдена. Начни заново.'));
       return;
         }
+        
+    // ЧАСТЬ 1: Проверяем лимиты и энергию перед броском
+    const limitCheck = checkLimit(id, 'classic');
+    if (!limitCheck.allowed) {
+      bot.sendMessage(id, formatMessage('КЛАССИКА', limitCheck.reason), { reply_markup: backKeyboard() });
+      return;
+    }
+    
+    // Тратим энергию
+    refillEnergy(p);
+    p.energy -= ENERGY_COST.classic;
+    saveData();
+    
+    // Обновляем счётчик лимитов
+    if (p.dailyCounters && p.dailyCounters.date === new Date().toDateString()) {
+      p.dailyCounters.games.classic = (p.dailyCounters.games.classic || 0) + 1;
+    }
+    saveData();
+    
         if (p.demoMode) {
       p.demoBalance = safeNumber(p.demoBalance) - amount;
     } else {
@@ -3590,13 +3836,12 @@ if (data === 'menu_achievements') {
     }
     // Расчёт удачи
   p.luck = (p.luck || 0) + (p.achievements?.length || 0) * 0.5 + (p.rank || 0) * 2 + (p.dailyStreak || 0) * 0.5;
-  p.luck = Math.min(p.luck, 30); // Максимум 30%
+  p.luck = Math.min(p.luck, 30);
 
   const playerDice = Math.floor(Math.random() * 6) + 1;
   const playerDice2 = Math.floor(Math.random() * 6) + 1;
   let playerSum = playerDice + playerDice2;
 
-  // Применяем бонус удачи (увеличиваем сумму на luck%)
   const luckBonus = Math.floor(playerSum * (p.luck / 100));
   playerSum += luckBonus;
 
@@ -3604,12 +3849,10 @@ if (data === 'menu_achievements') {
   const bankDice2 = Math.floor(Math.random() * 6) + 1;
   let bankSum = bankDice + bankDice2;
 
-  // Банк тоже может получить удачу (случайно)
-  const bankLuck = Math.random() * 10; // 0-10%
+  const bankLuck = Math.random() * 10;
   const bankBonus = Math.floor(bankSum * (bankLuck / 100));
   bankSum += bankBonus;
     
-  // Показываем персонажей перед броском (горизонтально: Дейви Джонс VS Джек Воробей)
   await bot.sendSticker(id, STICKERS.player_davy);
   await sleep(500);
   await bot.sendMessage(id, formatMessage('⚔️ VS ⚔️', ''));
@@ -3617,10 +3860,8 @@ if (data === 'menu_achievements') {
   await bot.sendSticker(id, STICKERS.bank_jack);
   await sleep(1000);
 
-  // === ОТПРАВЛЯЕМ АНИМАЦИЮ ===
   await sendDiceAnimation(id, playerDice, playerDice2, bankDice, bankDice2);
 
-      // === ДАЛЬШЕ ИДЁТ РЕЗУЛЬТАТ ===
     let winAmount = 0;
     let isWin = false;
     let isPoint = false;
@@ -3678,7 +3919,6 @@ if (data === 'menu_achievements') {
   const balanceAfter = p.demoMode ? safeNumber(p.demoBalance) : safeNumber(p.balance);
   checkJackpotBonus(id, amount, isWin);
   
-  // Обновляем ежедневную статистику и проверяем задания
   updateDailyStats(id, 'classic', isWin ? 'win' : 'lose', amount);
 
   const target = getJackpotTarget();
@@ -3705,7 +3945,6 @@ if (data === 'menu_achievements') {
   const bankDice1Emoji = getDiceEmoji(bankDice);
   const bankDice2Emoji = getDiceEmoji(bankDice2);
 
-  // ФРАЗА ТЕПЕРЬ ИДЁТ ПЕРВОЙ, СРАЗУ ПОСЛЕ ЗАГОЛОВКА
   const resultMsg = `${resultEmoji} ${resultTitle}\n\n` +
     `${phrase}\n\n` +
     `🎲 Ты: ${playerDice1Emoji} ${playerDice2Emoji} = ${playerSum}\n` +
@@ -3716,7 +3955,7 @@ if (data === 'menu_achievements') {
     `📊 ${jackpotCounter}/${target}\n` +
     `🟩 ${bar}`;
 
-    bot.sendMessage(id, formatMessage(resultTitle, resultMsg), {
+  bot.sendMessage(id, formatMessage(resultTitle, resultMsg), {
      reply_markup: resultKeyboard()
   });
   p.currentMode = null;
@@ -4011,7 +4250,7 @@ if (data === 'menu_achievements') {
     return;
   }
 
-  if (data.startsWith('duel_accept_')) {
+       if (data.startsWith('duel_accept_')) {
     const parts = data.split('_');
     const challengerId = parseInt(parts[2]);
     const amount = parseInt(parts[3]);
@@ -4284,6 +4523,13 @@ bot.on('message', async (msg) => {
 
     // ==================== КЛАССИКА ====================
     if (p.currentMode === 'classic') {
+      // ЧАСТЬ 1: Проверяем лимиты и энергию
+      const limitCheck = checkLimit(id, 'classic');
+      if (!limitCheck.allowed) {
+        bot.sendMessage(id, formatMessage('КЛАССИКА', limitCheck.reason), { reply_markup: backKeyboard() });
+        return;
+      }
+      
       const balance = p.demoMode ? safeNumber(p.demoBalance) : safeNumber(p.balance);
       if (balance < amount) {
         bot.sendMessage(id, formatMessage('КЛАССИКА', `❌ Не хватает. У тебя ${balance} дуб.`), { reply_markup: backKeyboard() });
@@ -4309,8 +4555,15 @@ bot.on('message', async (msg) => {
       return;
     }
 
-    // ==================== ДУЭЛЬ ====================
+  // ==================== ДУЭЛЬ ====================
     if (p.currentMode === 'duel') {
+      // ЧАСТЬ 1: Проверяем лимиты и энергию для дуэли
+      const limitCheck = checkLimit(id, 'duel');
+      if (!limitCheck.allowed) {
+        bot.sendMessage(id, formatMessage('ДУЭЛЬ', limitCheck.reason), { reply_markup: backKeyboard() });
+        return;
+      }
+      
       if (amount < MIN_DUEL_MONEY || amount > MAX_DUEL_MONEY) {
         bot.sendMessage(id, formatMessage('ДУЭЛЬ', `❌ Ставка от ${MIN_DUEL_MONEY} до ${MAX_DUEL_MONEY} дуб.`), { reply_markup: backKeyboard() });
         return;
@@ -4358,6 +4611,13 @@ bot.on('message', async (msg) => {
 
       // ==================== VIP ====================
     if (p.currentMode === 'vip') {
+      // ЧАСТЬ 1: Проверяем лимиты и энергию для VIP
+      const limitCheck = checkLimit(id, 'vip');
+      if (!limitCheck.allowed) {
+        bot.sendMessage(id, formatMessage('VIP', limitCheck.reason), { reply_markup: backKeyboard() });
+        return;
+      }
+      
       if (p.demoMode) {
         bot.sendMessage(id, formatMessage('VIP', '❌ VIP-игра недоступна в демо-режиме.'), { reply_markup: backKeyboard() });
         return;
@@ -4378,7 +4638,6 @@ bot.on('message', async (msg) => {
       const adminDice = Math.floor(Math.random() * 6) + 1;
       const adminDice2 = Math.floor(Math.random() * 6) + 1;
       const adminSum = adminDice + adminDice2;
-      // Показываем персонажей перед броском (горизонтально: Дейви Джонс VS Джек Воробей)
     await bot.sendSticker(id, STICKERS.player_davy);
     await sleep(500);
     await bot.sendMessage(id, formatMessage('⚔️ VS ⚔️', ''));
@@ -4409,7 +4668,6 @@ bot.on('message', async (msg) => {
       }
       const balanceAfter = safeNumber(p.balance);
       
-      // Обновляем статистику
       const vipResult = winAmount > 0 ? 'win' : (winAmount < 0 ? 'lose' : 'draw');
       updateDailyStats(id, 'vip', vipResult, amount);
       
@@ -4429,7 +4687,6 @@ bot.on('message', async (msg) => {
       const playerDice2Emoji = getDiceEmoji(playerDice2);
       const adminDice1Emoji = getDiceEmoji(adminDice);
       const adminDice2Emoji = getDiceEmoji(adminDice2);
-            // ФРАЗА ТЕПЕРЬ ИДЁТ ПЕРВОЙ, СРАЗУ ПОСЛЕ ЗАГОЛОВКА
       const resultMsg = `${resultTitle}\n\n${phrase}\n\n` +
         `🎲 Ты: ${playerDice1Emoji} ${playerDice2Emoji} = ${playerSum}\n` +
         `🏴‍☠️ Админ: ${adminDice1Emoji} ${adminDice2Emoji} = ${adminSum}\n\n` +
@@ -4446,6 +4703,13 @@ bot.on('message', async (msg) => {
 
       // ==================== БЛЭКДЖЕК ====================
     if (p.currentMode === 'blackjack') {
+      // ЧАСТЬ 1: Проверяем лимиты и энергию для блэкджека
+      const limitCheck = checkLimit(id, 'blackjack');
+      if (!limitCheck.allowed) {
+        bot.sendMessage(id, formatMessage('БЛЭКДЖЕК', limitCheck.reason), { reply_markup: backKeyboard() });
+        return;
+      }
+      
       if (amount < BLACKJACK_CONFIG.minBet || amount > BLACKJACK_CONFIG.maxBet) {
         bot.sendMessage(id, formatMessage('БЛЭКДЖЕК', `❌ Ставка от ${BLACKJACK_CONFIG.minBet} до ${BLACKJACK_CONFIG.maxBet} дуб.`), { reply_markup: backKeyboard() });
         return;
@@ -4475,7 +4739,6 @@ bot.on('message', async (msg) => {
       game.playerHand = [deck.pop(), deck.pop()];
       game.dealerHand = [deck.pop(), deck.pop()];
 
-      // Анимация раздачи карт
       await sendBlackjackAnimation(id, game.playerHand[0], game.playerHand[1], game.dealerHand[0], game.dealerHand[1]);
 
       const playerValue = getHandValue(game.playerHand);
@@ -4600,8 +4863,8 @@ setInterval(() => {
 }, 5 * 60 * 1000);
 
 // ==================== РАСПИСАНИЕ РАБОТЫ (UTC) ====================
-const WORK_START = 4 * 60;  // 4:00 UTC = 7:00 MSK
-const WORK_END = 20 * 60;   // 20:00 UTC = 23:00 MSK
+const WORK_START = 4 * 60;
+const WORK_END = 20 * 60;
 
 console.log(`🕐 Текущее UTC время: ${new Date().toUTCString()}`);
 console.log(`📅 Расписание: старт в ${Math.floor(WORK_START/60)}:${String(WORK_START%60).padStart(2,'0')} UTC, стоп в ${Math.floor(WORK_END/60)}:${String(WORK_END%60).padStart(2,'0')} UTC`);
@@ -4626,10 +4889,7 @@ function checkSchedule() {
   }
 }
 
-// Проверяем сразу при старте
 checkSchedule();
-
-// Проверяем каждую минуту
 setInterval(checkSchedule, 60 * 1000);
 
 bot.setMyCommands([
@@ -4657,9 +4917,10 @@ bot.onText(/\/menu/, (msg) => {
   });
 });
 
-console.log('🏴‍☠️ ЧЁРНАЯ КОСТЬ v16.0 — ФИНАЛЬНАЯ ВЕРСИЯ ЗАПУЩЕНА');
-console.log('✅ Все ошибки исправлены');
-console.log('✅ Все функции добавлены');
+console.log('🏴‍☠️ ЧЁРНАЯ КОСТЬ v17.0 — ЧАСТЬ 1 ГОТОВА');
+console.log('✅ Система доступа (Free/Premium/Legendary)');
+console.log('✅ Лимиты и энергия');
+console.log('✅ Telegram Premium интеграция');
 console.log(`👥 Игроков: ${Object.keys(players).length}`);
 console.log(`💰 Банк: ${safeNumber(bank.pot)}, Джекпот: ${safeNumber(bank.jackpot)}`);
 
