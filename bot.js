@@ -137,6 +137,29 @@ const ENERGY_COST = {
   chest: 1
 };
 
+// ==================== ЧАСТЬ 2: ЭКОНОМИКА ====================
+
+// 2.4: Комиссии бота
+const COMMISSION = {
+  deposit: 0.05,   // 5% при пополнении
+  withdraw: 0.10,  // 10% при выводе
+  duel: 0.10,      // 10% от ставки в дуэли
+  vip: 0.15,       // 15% от ставки в VIP
+  chest: 0.05,     // 5% от выигрыша в сундук
+  trade: 0.05      // 5% от перевода
+};
+
+// 2.3: Новые диапазоны сундуков (нерф)
+const CHEST_TYPES = {
+  chest_free: { name: 'Бесплатный', cost: 0, chance: 100, min: 1, max: 100, dailyLimit: 3 },
+  chest_wood: { name: 'Деревянный', cost: 50, chance: 90, min: 20, max: 100 },
+  chest_copper: { name: 'Медный', cost: 200, chance: 70, min: 50, max: 300 },
+  chest_iron: { name: 'Железный', cost: 500, chance: 50, min: 100, max: 800 },
+  chest_gold: { name: 'Золотой', cost: 1000, chance: 30, min: 200, max: 2000 },
+  chest_diamond: { name: 'Алмазный', cost: 5000, chance: 10, min: 500, max: 5000 },
+  chest_royal: { name: 'Королевский', cost: 10000, chance: 5, min: 1000, max: 15000 }
+};
+
 // ==================== БЛЭКДЖЕК ====================
 const BLACKJACK_CONFIG = {
   decks: 6,
@@ -1234,21 +1257,46 @@ function updateMaxEnergy(p) {
   else if (p.tier === 'premium') p.maxEnergy = 25;
   else p.maxEnergy = 10;
   
-  // Если текущая энергия больше нового максимума — обрезаем
   if (p.energy > p.maxEnergy) p.energy = p.maxEnergy;
   saveData();
+}
+
+// 2.2: НОВЫЙ ПАССИВНЫЙ ДОХОД (привязка к балансу)
+function collectPassiveIncome(id) {
+  const p = getPlayer(id);
+  if (!p) return;
+  const now = Date.now();
+  const elapsedMs = now - p.lastPassiveTime;
+  const hours = elapsedMs / 3600000;
+  if (hours < 1) return;
+  
+  const balance = p.demoMode ? safeNumber(p.demoBalance) : safeNumber(p.balance);
+  const basePercent = 0.001; // 0.1% в час
+  const rankMultiplier = 1 + (p.rank * 0.1);
+  const tierMultiplier = p.tier === 'free' ? 1 : (p.tier === 'premium' ? 2 : 3);
+  const earned = Math.floor(balance * basePercent * rankMultiplier * tierMultiplier * hours);
+  
+  if (earned > 0) {
+    p.passiveCollected = safeNumber(p.passiveCollected) + earned;
+    p.lastPassiveTime = now;
+    saveData();
+  }
 }
 
 function getPlayer(id) {
   if (!players[id]) {
     players[id] = {
-      // ЧАСТЬ 1: Новые поля
-      tier: 'free',          // 1.1: Три уровня доступа
-      tierExpiry: 0,          // 1.1: Время окончания Legendary
-      energy: 10,             // 1.6: Текущая энергия
-      maxEnergy: 10,          // 1.6: Максимум энергии
-      lastEnergyRefill: Date.now(), // 1.6: Время последнего восполнения
-      dailyCounters: { date: new Date().toDateString(), games: {} }, // 1.3: Счётчики лимитов
+      // ЧАСТЬ 1: Поля доступа
+      tier: 'free',
+      tierExpiry: 0,
+      energy: 10,
+      maxEnergy: 10,
+      lastEnergyRefill: Date.now(),
+      dailyCounters: { date: new Date().toDateString(), games: {} },
+      
+      // ЧАСТЬ 2: Поля экономики
+      share: 0,          // 2.1: Доля в банке (0-20%)
+      sharePurchased: 0, // 2.1: Сколько потрачено на долю
       
       // Старые поля
       chestStats: { opened: 0, wins: 0, losses: 0, maxWin: 0 },
@@ -1267,7 +1315,6 @@ function getPlayer(id) {
       demoHasRolled: false,
       demoPoint: 0,
       rank: 0,
-      share: 0,
       username: 'unknown',
       games: 0,
       wins: 0,
@@ -1540,23 +1587,6 @@ function calculateTotalIncome(p) {
   }
   const bonus = getFleetBonus(p);
   return Math.floor(total * (1 + bonus / 100));
-}
-
-function collectPassiveIncome(id) {
-  const p = getPlayer(id);
-  if (!p) return;
-  const now = Date.now();
-  const elapsedMs = now - p.lastPassiveTime;
-  const hours = elapsedMs / 3600000;
-  if (hours < 1) return;
-  const basePassive = RANKS[p.rank].passive;
-  const bonusMultiplier = 1 + (p.passiveBonus || 0) / 100;
-  const earned = Math.floor(basePassive * hours * bonusMultiplier);
-  if (earned > 0) {
-    p.passiveCollected = safeNumber(p.passiveCollected) + earned;
-    p.lastPassiveTime = now;
-    saveData();
-  }
 }
 
 function checkAchievements(id) {
@@ -2008,8 +2038,8 @@ function processDuel(challengerId, opponentId, amount) {
   let roundResults = [];
   const challengerBet = amount;
   const opponentBet = amount;
-  
-  // Горизонтальная анимация: игрок VS соперник
+
+// Горизонтальная анимация: игрок VS соперник
   bot.sendSticker(challengerId, STICKERS.duel_player).catch(() => {});
   sleep(500);
   
@@ -2057,7 +2087,8 @@ function processDuel(challengerId, opponentId, amount) {
 
 const loserId = winnerId === challengerId ? opponentId : challengerId;
   const totalPot = amount * 2;
-  const comm = Math.floor(totalPot * 0.1);
+  // 2.4: Применяем комиссию дуэли (10%)
+  const comm = Math.floor(totalPot * COMMISSION.duel);
   bank.commission = safeNumber(bank.commission) + comm;
   const winAmount = totalPot - comm;
   const winner = getPlayer(winnerId);
@@ -2088,7 +2119,7 @@ const loserId = winnerId === challengerId ? opponentId : challengerId;
     resultMsg += `Раунд ${r.round}: ${r.challengerSum} vs ${r.opponentSum}\n`;
   });
   resultMsg += `\n🏆 Победитель: @${winner.username || winnerId}`;
-  resultMsg += `\n💰 Выигрыш: ${winAmount} дуб.`;
+  resultMsg += `\n💰 Выигрыш: ${winAmount} дуб. (комиссия: ${comm} дуб.)`;
   
   bot.sendMessage(challengerId, formatMessage('ДУЭЛЬ ЗАВЕРШЕНА', resultMsg), { reply_markup: duelResultKeyboard() });
   bot.sendMessage(opponentId, formatMessage('ДУЭЛЬ ЗАВЕРШЕНА', resultMsg), { reply_markup: duelResultKeyboard() });
@@ -2178,6 +2209,32 @@ function startRound() {
     saveData();
     setTimeout(() => { bank.roundActive = false; startRound(); }, 30000);
   }, 600000);
+}
+
+// 2.1: Распределение долей в банке
+function distributeShares() {
+  const totalShares = Object.values(players).reduce((sum, p) => sum + (p.share || 0), 0);
+  if (totalShares === 0) return;
+  
+  // 1% от банка за день
+  const profit = Math.floor(safeNumber(bank.pot) * 0.01);
+  if (profit === 0) return;
+  
+  for (let id in players) {
+    const p = players[id];
+    if (p.share > 0 && p.tier === 'legendary') {
+      const income = Math.floor(profit * (p.share / totalShares));
+      if (income > 0) {
+        if (p.demoMode) {
+          p.demoBalance = safeNumber(p.demoBalance) + income;
+        } else {
+          p.balance = safeNumber(p.balance) + income;
+        }
+        addHistory(id, `Доля в банке: +${income} дуб. (${p.share}%)`);
+      }
+    }
+  }
+  saveData();
 }
 
 function startTournament() {
@@ -2313,7 +2370,8 @@ bot.onText(/\/trade @(\w+) (\d+)/, async (msg, match) => {
     bot.sendMessage(id, formatMessage('ТОРГОВЛЯ', '❌ Ты исчерпал лимит переводов (3/день).'));
     return;
   }
-  const fee = Math.floor(amount * 0.05);
+  // 2.4: Комиссия за торговлю (5%)
+  const fee = Math.floor(amount * COMMISSION.trade);
   const finalAmount = amount - fee;
   if (p.demoMode) {
     p.demoBalance = safeNumber(p.demoBalance) - amount;
@@ -2561,8 +2619,8 @@ bot.onText(/\/start/, async (msg) => {
       saveData();
       bot.sendMessage(id, formatMessage('⏰ LEGENDARY ЗАКОНЧИЛСЯ', 'Твой Legendary-доступ истёк. Ты возвращён на бесплатный уровень.'));
     }
-    
-    // ЧАСТЬ 1: Восстанавливаем энергию
+
+  // ЧАСТЬ 1: Восстанавливаем энергию
     refillEnergy(p);
     
     if (p.demoMode && p.demoDate !== new Date().toDateString()) {
@@ -2614,7 +2672,6 @@ bot.onText(/\/start/, async (msg) => {
     const target = getJackpotTarget();
     const bar = getJackpotBar();
     
-    // ЧАСТЬ 1: Добавляем информацию о тире и энергии
     const tierEmoji = p.tier === 'legendary' ? '👑' : (p.tier === 'premium' ? '⭐' : '🆓');
     const tierLabel = p.tier === 'legendary' ? 'Легендарный' : (p.tier === 'premium' ? 'Премиум' : 'Бесплатный');
     
@@ -2784,7 +2841,6 @@ if (data === 'menu_play') {
   if (data === 'mode_classic') {
     p.currentMode = 'classic';
     collectPassiveIncome(id);
-    // ЧАСТЬ 1: Проверяем лимиты перед выбором ставки
     const limitCheck = checkLimit(id, 'classic');
     if (!limitCheck.allowed) {
       bot.sendMessage(id, formatMessage('КЛАССИКА', limitCheck.reason), { reply_markup: backKeyboard() });
@@ -2797,7 +2853,6 @@ if (data === 'menu_play') {
   }
 
   if (data === 'mode_duel') {
-    // ЧАСТЬ 1: Проверяем доступность дуэлей для FREE
     if (p.tier === 'free') {
       const limitCheck = checkLimit(id, 'duel');
       if (!limitCheck.allowed) {
@@ -2814,7 +2869,6 @@ if (data === 'menu_play') {
   }
 
   if (data === 'mode_vip') {
-    // ЧАСТЬ 1: Проверяем доступность VIP для FREE
     if (p.tier === 'free') {
       const limitCheck = checkLimit(id, 'vip');
       if (!limitCheck.allowed) {
@@ -2834,8 +2888,7 @@ if (data === 'menu_play') {
     return;
   }
 
-  if (data === 'mode_blackjack') {
-    // ЧАСТЬ 1: Проверяем доступность блэкджека для FREE
+       if (data === 'mode_blackjack') {
     if (p.tier === 'free') {
       const limitCheck = checkLimit(id, 'blackjack');
       if (!limitCheck.allowed) {
@@ -2873,7 +2926,6 @@ if (data === 'menu_play') {
     const fleetIncome = calculateTotalIncome(p);
     const fleetBonus = getFleetBonus(p);
 
-    // ЧАСТЬ 1: Добавляем информацию о тире и лимитах в профиль
     const tierEmoji = p.tier === 'legendary' ? '👑' : (p.tier === 'premium' ? '⭐' : '🆓');
     const tierLabel = p.tier === 'legendary' ? 'Легендарный' : (p.tier === 'premium' ? 'Премиум' : 'Бесплатный');
     
@@ -2886,6 +2938,9 @@ if (data === 'menu_play') {
       limitsInfo = '👑 Все ограничения сняты!';
     }
 
+    // 2.1: Добавляем информацию о доле в банке
+    const shareInfo = p.share > 0 ? `📊 Доля в банке: ${p.share}%` : '📊 Доля в банке: нет';
+
     let msg = `👤 ПРОФИЛЬ\n\n` +
       `🏴‍☠️ Флаг: ${p.flag || '🏴‍☠️'}\n` +
       `🏴‍☠️ Имя: @${p.username || 'unknown'}\n` +
@@ -2894,10 +2949,10 @@ if (data === 'menu_play') {
       `👑 Уровень доступа: ${tierEmoji} ${tierLabel}\n` +
       `⚡ Энергия: ${p.energy}/${p.maxEnergy}\n` +
       `${limitsInfo}\n` +
+      `${shareInfo}\n` +
       `📈 Победы: ${wins}\n` +
       `📉 Поражения: ${losses}\n` +
       `📊 Винрейт: ${winrate}%\n` +
-      `📊 Доля: ${p.share}%\n` +
       `🔗 Рефералов: ${p.refs?.length || 0} (заработано: ${p.refStats?.earned || 0} дуб.)\n` +
       `💵 Заработано: ${p.totalEarned || 0} дуб.\n` +
       `🛳️ Кораблей: ${p.fleet?.ships?.length || 0} (доход: ${fleetIncome} дуб./час${fleetBonus > 0 ? `, бонус: +${fleetBonus}%` : ''})\n` +
@@ -3112,7 +3167,7 @@ if (data === 'menu_achievements') {
     return;
   }
 
-  if (data === 'collect_take') {
+       if (data === 'collect_take') {
     collectPassiveIncome(id);
     if (safeNumber(p.passiveCollected) <= 0) {
       bot.sendMessage(id, formatMessage('ДОХОД', '❌ Нет дохода для сбора.'), { reply_markup: backKeyboard() });
@@ -3258,7 +3313,6 @@ if (data === 'menu_achievements') {
 
          // ==================== СУНДУКИ ====================
   if (data === 'menu_chest') {
-    // ЧАСТЬ 1: Проверяем лимиты на сундуки
     const limitCheck = checkLimit(id, 'chest');
     if (!limitCheck.allowed) {
       bot.sendMessage(id, formatMessage('СУНДУК', limitCheck.reason), { reply_markup: backKeyboard() });
@@ -3266,7 +3320,7 @@ if (data === 'menu_achievements') {
     }
     bot.sendMessage(id, formatMessage(
       '🎁 СУНДУК ПИРАТА',
-      'Выбери сундук для открытия:\n\n🆓 Бесплатный — 0 дуб. (3/день, 1-100 дуб.)\n🪵 Деревянный — 50 дуб. (шанс 90%, x2)\n⚓ Медный — 200 дуб. (шанс 70%, x3)\n🏴‍☠️ Железный — 500 дуб. (шанс 50%, x5)\n🔥 Золотой — 1000 дуб. (шанс 30%, x10)\n💎 Алмазный — 5000 дуб. (шанс 10%, x50)\n👑 Королевский — 10000 дуб. (шанс 5%, x100)'
+      'Выбери сундук для открытия:\n\n🆓 Бесплатный — 0 дуб. (3/день, 1-100 дуб.)\n🪵 Деревянный — 50 дуб. (шанс 90%)\n⚓ Медный — 200 дуб. (шанс 70%)\n🏴‍☠️ Железный — 500 дуб. (шанс 50%)\n🔥 Золотой — 1000 дуб. (шанс 30%)\n💎 Алмазный — 5000 дуб. (шанс 10%)\n👑 Королевский — 10000 дуб. (шанс 5%)'
     ), {
       reply_markup: chestKeyboard()
     });
@@ -3274,14 +3328,12 @@ if (data === 'menu_achievements') {
   }
 
   if (data === 'chest_free' || data === 'chest_wood' || data === 'chest_copper' || data === 'chest_iron' || data === 'chest_gold' || data === 'chest_diamond' || data === 'chest_royal') {
-    // ЧАСТЬ 1: Проверяем лимиты и энергию перед открытием
     const limitCheck = checkLimit(id, 'chest');
     if (!limitCheck.allowed) {
       bot.sendMessage(id, formatMessage('СУНДУК', limitCheck.reason), { reply_markup: backKeyboard() });
       return;
     }
     
-    // Тратим энергию
     refillEnergy(p);
     if (p.energy < ENERGY_COST.chest) {
       bot.sendMessage(id, formatMessage('СУНДУК', `❌ Не хватает энергии! Нужно ${ENERGY_COST.chest}, у тебя ${p.energy}.`), { reply_markup: backKeyboard() });
@@ -3295,20 +3347,11 @@ if (data === 'menu_achievements') {
       return;
     }
 
-    const chestTypes = {
-      chest_free: { name: 'Бесплатный', cost: 0, chance: 100, multiplier: 1, min: 1, max: 100, dailyLimit: 3 },
-      chest_wood: { name: 'Деревянный', cost: 50, chance: 90, multiplier: 2, min: 75, max: 300 },
-      chest_copper: { name: 'Медный', cost: 200, chance: 70, multiplier: 3, min: 300, max: 1200 },
-      chest_iron: { name: 'Железный', cost: 500, chance: 50, multiplier: 5, min: 750, max: 3000 },
-      chest_gold: { name: 'Золотой', cost: 1000, chance: 30, multiplier: 10, min: 1500, max: 6000 },
-      chest_diamond: { name: 'Алмазный', cost: 5000, chance: 10, multiplier: 50, min: 7500, max: 30000 },
-      chest_royal: { name: 'Королевский', cost: 10000, chance: 5, multiplier: 100, min: 15000, max: 100000 },
-    };
-
-    const chest = chestTypes[data];
+    // 2.3: Используем новые диапазоны CHEST_TYPES
+    const chest = CHEST_TYPES[data];
     if (!chest) return;
 
-      if (data === 'chest_free') {
+    if (data === 'chest_free') {
       const today = new Date().toDateString();
       if (p.freeChestDate !== today) {
         p.freeChestToday = 0;
@@ -3318,9 +3361,9 @@ if (data === 'menu_achievements') {
         bot.sendMessage(id, formatMessage('СУНДУК', '❌ Ты уже открыл 3 бесплатных сундука сегодня. Завтра будет новый лимит.'));
         return;
       }
-      }
+    }
 
-  const balance = p.demoMode ? safeNumber(p.demoBalance) : safeNumber(p.balance);
+    const balance = p.demoMode ? safeNumber(p.demoBalance) : safeNumber(p.balance);
     if (chest.cost > 0 && balance < chest.cost) {
       bot.sendMessage(id, formatMessage('СУНДУК', `❌ Не хватает ${chest.cost} дуб. У тебя ${balance} дуб.`));
       return;
@@ -3367,23 +3410,30 @@ if (data === 'menu_achievements') {
     }
     p.chestsToday = (p.chestsToday || 0) + 1;
 
+    // 2.4: Комиссия с выигрыша в сундуке (5%)
+    let commissionAmount = 0;
     if (isWin && winAmount > 0) {
+      commissionAmount = Math.floor(winAmount * COMMISSION.chest);
+      const netWin = winAmount - commissionAmount;
+      
       if (p.demoMode) {
-        p.demoBalance = safeNumber(p.demoBalance) + winAmount;
+        p.demoBalance = safeNumber(p.demoBalance) + netWin;
       } else {
-        p.balance = safeNumber(p.balance) + winAmount;
+        p.balance = safeNumber(p.balance) + netWin;
       }
-      p.totalEarned = safeNumber(p.totalEarned) + winAmount;
-      addHistory(id, `Сундук ${chest.name}: выигрыш +${winAmount} дуб.`);
-      addBalanceHistory(id, winAmount, `Сундук ${chest.name} выигрыш`);
+      p.totalEarned = safeNumber(p.totalEarned) + netWin;
+      bank.commission = safeNumber(bank.commission) + commissionAmount;
+      
+      addHistory(id, `Сундук ${chest.name}: выигрыш +${netWin} дуб. (комиссия ${commissionAmount})`);
+      addBalanceHistory(id, netWin, `Сундук ${chest.name} выигрыш`);
 
-      if (winAmount >= 1000) {
+     if (winAmount >= 1000) {
         bot.sendMessage(ADMIN_ID, formatMessage(
           '💰 КРУПНЫЙ ВЫИГРЫШ В СУНДУКЕ!',
-          `Игрок: @${p.username || id}\nСундук: ${chest.name}\nВыигрыш: ${winAmount} дуб.\nБаланс: ${balance + winAmount} дуб.`
+          `Игрок: @${p.username || id}\nСундук: ${chest.name}\nВыигрыш: ${netWin} дуб. (комиссия ${commissionAmount})\nБаланс: ${balance + netWin} дуб.`
         ));
       }
-    } else {
+    } else if (!isWin && chest.cost > 0) {
       addHistory(id, `Сундук ${chest.name}: проигрыш (${chest.cost} дуб.)`);
       addBalanceHistory(id, -chest.cost, `Сундук ${chest.name} проигрыш`);
     }
@@ -3393,7 +3443,7 @@ if (data === 'menu_achievements') {
 
     const balanceAfter = p.demoMode ? safeNumber(p.demoBalance) : safeNumber(p.balance);
     const resultMsg = isWin ?
-      `🎉 Ты выиграл ${winAmount} дуб.!\n💰 Баланс: ${balanceAfter} дуб.` :
+      `🎉 Ты выиграл ${winAmount - commissionAmount} дуб.!\n💰 Комиссия: ${commissionAmount} дуб.\n💰 Баланс: ${balanceAfter} дуб.` :
       `💀 Ты проиграл ${chest.cost} дуб.\n💰 Баланс: ${balanceAfter} дуб.`;
 
     bot.sendMessage(id, formatMessage(`СУНДУК ${chest.name}`, resultMsg), {
@@ -3653,9 +3703,9 @@ if (data === 'menu_achievements') {
     saveData();
     bot.sendMessage(id, formatMessage('ТУРНИР', '✅ Ты зарегистрирован в турнире!'), { reply_markup: tournamentKeyboard() });
     return;
-  }
+       }
 
-  if (data === 'tournament_leaderboard') {
+         if (data === 'tournament_leaderboard') {
     if (tournaments.results.length === 0) {
       bot.sendMessage(id, formatMessage('ТУРНИР', '📋 Пока нет результатов.'), { reply_markup: backKeyboard() });
       return;
@@ -3811,19 +3861,16 @@ if (data === 'menu_achievements') {
       return;
         }
         
-    // ЧАСТЬ 1: Проверяем лимиты и энергию перед броском
     const limitCheck = checkLimit(id, 'classic');
     if (!limitCheck.allowed) {
       bot.sendMessage(id, formatMessage('КЛАССИКА', limitCheck.reason), { reply_markup: backKeyboard() });
       return;
     }
     
-    // Тратим энергию
     refillEnergy(p);
     p.energy -= ENERGY_COST.classic;
     saveData();
     
-    // Обновляем счётчик лимитов
     if (p.dailyCounters && p.dailyCounters.date === new Date().toDateString()) {
       p.dailyCounters.games.classic = (p.dailyCounters.games.classic || 0) + 1;
     }
@@ -4230,7 +4277,7 @@ if (data === 'menu_achievements') {
     return;
   }
 
-  // ==================== ДУЭЛЬ (ПРИНЯТЬ/ОТКАЗАТЬ) ====================
+       // ==================== ДУЭЛЬ (ПРИНЯТЬ/ОТКАЗАТЬ) ====================
   if (data === 'duel_cancel') {
     if (duelChallenges[id]) {
       delete duelChallenges[id];
@@ -4523,7 +4570,6 @@ bot.on('message', async (msg) => {
 
     // ==================== КЛАССИКА ====================
     if (p.currentMode === 'classic') {
-      // ЧАСТЬ 1: Проверяем лимиты и энергию
       const limitCheck = checkLimit(id, 'classic');
       if (!limitCheck.allowed) {
         bot.sendMessage(id, formatMessage('КЛАССИКА', limitCheck.reason), { reply_markup: backKeyboard() });
@@ -4557,7 +4603,6 @@ bot.on('message', async (msg) => {
 
   // ==================== ДУЭЛЬ ====================
     if (p.currentMode === 'duel') {
-      // ЧАСТЬ 1: Проверяем лимиты и энергию для дуэли
       const limitCheck = checkLimit(id, 'duel');
       if (!limitCheck.allowed) {
         bot.sendMessage(id, formatMessage('ДУЭЛЬ', limitCheck.reason), { reply_markup: backKeyboard() });
@@ -4611,7 +4656,6 @@ bot.on('message', async (msg) => {
 
       // ==================== VIP ====================
     if (p.currentMode === 'vip') {
-      // ЧАСТЬ 1: Проверяем лимиты и энергию для VIP
       const limitCheck = checkLimit(id, 'vip');
       if (!limitCheck.allowed) {
         bot.sendMessage(id, formatMessage('VIP', limitCheck.reason), { reply_markup: backKeyboard() });
@@ -4647,12 +4691,16 @@ bot.on('message', async (msg) => {
 
     await sendDiceAnimation(id, playerDice, playerDice2, adminDice, adminDice2);
       let winAmount = 0;
+      // 2.4: Комиссия VIP (15%)
+      const vipCommission = COMMISSION.vip;
       if (playerSum > adminSum) {
-        winAmount = amount * 3;
+        winAmount = Math.floor(amount * 3 * (1 - vipCommission));
+        const comm = Math.floor(amount * 3 * vipCommission);
+        bank.commission = safeNumber(bank.commission) + comm;
         p.balance = safeNumber(p.balance) + winAmount;
         p.wins++;
         p.totalEarned = safeNumber(p.totalEarned) + winAmount;
-        addHistory(id, `VIP: победа +${winAmount} (${playerSum} vs ${adminSum})`);
+        addHistory(id, `VIP: победа +${winAmount} (${playerSum} vs ${adminSum}, комиссия ${comm})`);
         addBalanceHistory(id, winAmount, 'VIP победа');
         checkAchievements(id);
       } else if (playerSum < adminSum) {
@@ -4703,7 +4751,6 @@ bot.on('message', async (msg) => {
 
       // ==================== БЛЭКДЖЕК ====================
     if (p.currentMode === 'blackjack') {
-      // ЧАСТЬ 1: Проверяем лимиты и энергию для блэкджека
       const limitCheck = checkLimit(id, 'blackjack');
       if (!limitCheck.allowed) {
         bot.sendMessage(id, formatMessage('БЛЭКДЖЕК', limitCheck.reason), { reply_markup: backKeyboard() });
@@ -4827,6 +4874,10 @@ if (safeNumber(bank.pot) < 1000 && safeNumber(bank.commission) > 0) {
 }
 startRound();
 scheduleTournament();
+
+// 2.1: Запускаем распределение долей в банке (раз в день)
+setInterval(distributeShares, 24 * 3600000);
+
 setTimeout(scheduleRandomEvent, 60000);
 setInterval(() => {
   const now = Date.now();
@@ -4917,10 +4968,11 @@ bot.onText(/\/menu/, (msg) => {
   });
 });
 
-console.log('🏴‍☠️ ЧЁРНАЯ КОСТЬ v17.0 — ЧАСТЬ 1 ГОТОВА');
+console.log('🏴‍☠️ ЧЁРНАЯ КОСТЬ v17.0 — ЧАСТИ 1 И 2 ГОТОВЫ');
 console.log('✅ Система доступа (Free/Premium/Legendary)');
 console.log('✅ Лимиты и энергия');
 console.log('✅ Telegram Premium интеграция');
+console.log('✅ Новая экономика (доли, пассивный доход, комиссии, нерф сундуков)');
 console.log(`👥 Игроков: ${Object.keys(players).length}`);
 console.log(`💰 Банк: ${safeNumber(bank.pot)}, Джекпот: ${safeNumber(bank.jackpot)}`);
 
