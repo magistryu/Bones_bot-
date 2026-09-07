@@ -2259,11 +2259,16 @@ function collectPassiveIncome(id) {
     if (investHours > 0) {
       const investEarned = Math.floor(p.investment * p.investmentRate * investHours);
       if (investEarned > 0) {
-        // Добавляем к пассивному доходу
-        earned += investEarned;
+        // НАЧИСЛЯЕМ НАПРЯМУЮ В БАЛАНС
+        if (p.demoMode) {
+          p.demoBalance = safeNumber(p.demoBalance) + investEarned;
+        } else {
+          p.balance = safeNumber(p.balance) + investEarned;
+        }
+        p.totalEarned = safeNumber(p.totalEarned) + investEarned;
         // Обновляем время, чтобы не начислять повторно
         p.investmentTime = now;
-        // Сохраняем заработанное в историю
+        // Сохраняем в историю
         if (!p.investmentHistory) p.investmentHistory = [];
         p.investmentHistory.push({
           time: now,
@@ -2271,6 +2276,8 @@ function collectPassiveIncome(id) {
           amount: investEarned,
           balance: p.investment
         });
+        addHistory(id, `Инвестиции: начислено +${investEarned} дуб.`);
+        addBalanceHistory(id, investEarned, 'Инвестиции пассивный доход');
       }
     }
   }
@@ -2280,7 +2287,6 @@ function collectPassiveIncome(id) {
     p.lastPassiveTime = now;
     saveData();
   }
-}
 
 function getPlayer(id) {
   if (!players[id]) {
