@@ -123,6 +123,9 @@ const INVESTMENT_DAILY_RATE_MIN = 0.005;
 const INVESTMENT_DAILY_RATE_MAX = 0.02;
 const INVESTMENT_EARLY_WITHDRAW_FEE = 0.10;
 
+// ==================== КРАФТ КАРТ ====================
+const CRAFT_COST = 3; // 3 дубликата для крафта
+
 // ==================== ЧАСТЬ 1: СИСТЕМА ДОСТУПА И ЛИМИТЫ ====================
 
 // 1.1 и 1.7: Три уровня доступа + Цены на Legendary
@@ -966,6 +969,15 @@ const KRAKEN_LOSE_PHRASES = [
   '🌊 "Ты не справился с Кракеном. Океан забрал твой корабль!" 🌊',
 ];
 
+// Фразы для крафта карт
+const CRAFT_PHRASES = [
+  '🃏 "Магия карт! Три дубликата превратились в одну!" 🃏',
+  '✨ "Колода засияла! Крафт удался!" ✨',
+  '🔮 "Древняя пиратская магия объединила карты!" 🔮',
+  '🎴 "Три карты слились в одну! Новая сила!" 🎴',
+  '💫 "Звёзды сошлись! Крафт карты завершён!" 💫',
+];
+
 // ==================== ДОСТИЖЕНИЯ ====================
 const ACHIEVEMENTS = [
   { id: 1, name: '🎯 Первый шаг', desc: 'Сыграть первую игру', bonusPassive: 0.5 },
@@ -1320,7 +1332,6 @@ let souvenirsData = {
 };
 
 // ==================== ЧАСТЬ 7: СЛОЖНЫЕ РЕЖИМЫ ====================
-
 // 7.1: Морской бой (PvP)
 let battlesData = {};
 
@@ -1447,8 +1458,6 @@ function giveCardToUser(userId) {
   if (!cardsData.collection[userId]) cardsData.collection[userId] = [];
   if (cardsData.collection[userId].includes(card.id)) {
     // Даём дубликат (можно использовать для обмена или продажи)
-    // В данной версии просто даём дубликат, но счётчик увеличивается
-    // Для простоты — добавляем ещё одну копию (в будущем можно сделать систему дублей)
     cardsData.collection[userId].push(card.id);
   } else {
     cardsData.collection[userId].push(card.id);
@@ -1468,24 +1477,27 @@ function giveCardToUser(userId) {
     p.passiveBonus = (p.passiveBonus || 0) + 5;
     bot.sendMessage(userId, formatMessage('🏆 БОНУС ЗА КОЛЛЕКЦИЮ!', 'Ты собрал 25 карт! +5% к пассивному доходу!'));
     addHistory(userId, 'Бонус за 25 карт: +5% к пассивному доходу');
+    checkAchievements(userId);
   }
   if (totalCards >= 40 && !p.collectionBonus40) {
     p.collectionBonus40 = true;
     p.passiveBonus = (p.passiveBonus || 0) + 10;
     bot.sendMessage(userId, formatMessage('🏆 БОНУС ЗА КОЛЛЕКЦИЮ!', 'Ты собрал 40 карт! +10% к пассивному доходу!'));
     addHistory(userId, 'Бонус за 40 карт: +10% к пассивному доходу');
+    checkAchievements(userId);
   }
   if (totalCards >= 50 && !p.collectionBonus50) {
     p.collectionBonus50 = true;
     p.passiveBonus = (p.passiveBonus || 0) + 20;
     bot.sendMessage(userId, formatMessage('🏆 БОНУС ЗА КОЛЛЕКЦИЮ!', 'Ты собрал все 50 карт! +20% к пассивному доходу!'));
     addHistory(userId, 'Бонус за 50 карт: +20% к пассивному доходу');
+    checkAchievements(userId);
   }
   
   saveCards();
   saveData();
   return card;
-   }
+}
 
 function getCardInfo(cardId) {
   return CARDS.find(c => c.id === cardId);
@@ -1501,6 +1513,88 @@ function getUserCardStats(userId) {
     return { total: 0, common: 0, uncommon: 0, rare: 0, legendary: 0 };
   }
   return cardsData.cardStats[userId];
+}
+
+// ==================== КРАФТ КАРТ ====================
+function craftCards(userId) {
+  const p = getPlayer(userId);
+  if (!p) return { error: 'Игрок не найден' };
+  
+  const userCards = cardsData.collection[userId] || [];
+  if (userCards.length < CRAFT_COST) {
+    return { error: `Нужно минимум ${CRAFT_COST} карты для крафта` };
+  }
+  
+  // Считаем дубликаты
+  const cardCounts = {};
+  for (let cardId of userCards) {
+    cardCounts[cardId] = (cardCounts[cardId] || 0) + 1;
+  }
+  
+  // Ищем карту с 3+ дубликатами
+  let targetCardId = null;
+  let targetCard = null;
+  for (let cardId in cardCounts) {
+    if (cardCounts[cardId] >= CRAFT_COST) {
+      targetCardId = parseInt(cardId);
+      targetCard = CARDS.find(c => c.id === targetCardId);
+      break;
+    }
+  }
+  
+  if (!targetCardId || !targetCard) {
+    return { error: `Нет ${CRAFT_COST} одинаковых карт для крафта. Собери дубликаты!` };
+  }
+  
+  // Определяем следующую редкость
+  const rarityOrder = ['common', 'uncommon', 'rare', 'legendary'];
+  const currentRarityIndex = rarityOrder.indexOf(targetCard.rarity);
+  if (currentRarityIndex >= rarityOrder.length - 1) {
+    return { error: 'Легендарные карты нельзя улучшить!' };
+  }
+  
+  const nextRarity = rarityOrder[currentRarityIndex + 1];
+  const nextRarityCards = CARDS.filter(c => c.rarity === nextRarity);
+  if (nextRarityCards.length === 0) {
+    return { error: 'Нет карт следующей редкости' };
+  }
+  
+  // Удаляем 3 дубликата
+  let removed = 0;
+  const newUserCards = [];
+  for (let cardId of userCards) {
+    if (cardId === targetCardId && removed < CRAFT_COST) {
+      removed++;
+    } else {
+      newUserCards.push(cardId);
+    }
+  }
+  cardsData.collection[userId] = newUserCards;
+  
+  // Обновляем статистику
+  if (cardsData.cardStats[userId]) {
+    cardsData.cardStats[userId].total = (cardsData.cardStats[userId].total || 0) - CRAFT_COST + 1;
+    cardsData.cardStats[userId][targetCard.rarity] = (cardsData.cardStats[userId][targetCard.rarity] || 0) - CRAFT_COST;
+    cardsData.cardStats[userId][nextRarity] = (cardsData.cardStats[userId][nextRarity] || 0) + 1;
+  }
+  
+  // Выдаём новую карту
+  const newCard = nextRarityCards[Math.floor(Math.random() * nextRarityCards.length)];
+  cardsData.collection[userId].push(newCard.id);
+  
+  // Проверяем достижения
+  checkAchievements(userId);
+  
+  saveCards();
+  saveData();
+  
+  const phrase = CRAFT_PHRASES[Math.floor(Math.random() * CRAFT_PHRASES.length)];
+  return {
+    success: true,
+    oldCard: targetCard,
+    newCard: newCard,
+    phrase: phrase
+  };
 }
 
 // ==================== ФУНКЦИИ ДЛЯ СУВЕНИРОВ ====================
@@ -1551,6 +1645,7 @@ function giveSouvenirToUser(userId) {
     p.incomeBonus = (p.incomeBonus || 0) + souvenir.bonusValue;
   }
   
+  checkAchievements(userId);
   saveSouvenirs();
   saveData();
   return souvenir;
@@ -1675,8 +1770,8 @@ function createBattle(challengerId, opponentId, bet) {
   const battleId = Date.now().toString() + '_' + challengerId;
   const challengerField = generateBattleField();
   const opponentField = generateBattleField();
-  
-  battlesData[battleId] = {
+
+battlesData[battleId] = {
     challengerId: challengerId,
     opponentId: opponentId,
     bet: bet,
@@ -1733,15 +1828,9 @@ function makeBattleMove(battleId, playerId, coord) {
   
   if (isHit) {
     opponentField.hits.push({ row, col });
-    // Проверка, потоплен ли корабль
-    // (упрощённая проверка: если все клетки корабля подбиты)
-    // Находим все клетки корабля
-    const shipCells = opponentField.ships.filter(s => s.row === row && s.col === col);
-    // Для упрощения считаем, что корабль потоплен, если все его клетки подбиты
     let shipSunk = true;
     for (let ship of opponentField.ships) {
       if (ship.row === row && ship.col === col) {
-        // Проверяем все клетки этого корабля
         for (let cell of opponentField.ships) {
           if (cell.row === ship.row && cell.col === ship.col) {
             if (!opponentField.hits.some(h => h.row === cell.row && h.col === cell.col)) {
@@ -1753,8 +1842,7 @@ function makeBattleMove(battleId, playerId, coord) {
         break;
       }
     }
-
-  // Проверка, все ли корабли потоплены
+    
     const allShipsHit = opponentField.ships.every(s => 
       opponentField.hits.some(h => h.row === s.row && h.col === s.col)
     );
@@ -1767,19 +1855,16 @@ function makeBattleMove(battleId, playerId, coord) {
     }
     
     if (shipSunk) {
-      // Корабль потоплен, игрок продолжает ход
       battle.lastMove = Date.now();
       saveBattles();
       return { result: 'sunk', message: 'Корабль потоплен! Стреляй ещё раз!' };
     } else {
-      // Попадание, но не потоплен
       battle.lastMove = Date.now();
       saveBattles();
       return { result: 'hit', message: 'Попадание! Стреляй ещё раз!' };
     }
   } else {
     opponentField.misses.push({ row, col });
-    // Промах — ход переходит
     battle.turn = opponentId;
     battle.lastMove = Date.now();
     saveBattles();
@@ -1833,6 +1918,17 @@ function joinKrakenRaid(raidId, userId) {
   if (raid.participants.length >= 5) return { error: 'Рейд уже полный (максимум 5 игроков)' };
   
   raid.participants.push(userId);
+  
+  // АВТОСТАРТ при 5 участниках
+  if (raid.participants.length === 5) {
+    const startResult = startKrakenRaid(raidId);
+    if (startResult.success) {
+      for (let pid of raid.participants) {
+        bot.sendMessage(pid, formatMessage('🐙 РЕЙД НА КРАКЕНА НАЧАЛСЯ!', `👥 Набрано 5 участников!\n⚔️ Атакуйте Кракена!\n💚 HP Кракена: ${raid.krakenHealth}\n\nИспользуй /kraken_attack ${raidId} чтобы атаковать!`));
+      }
+    }
+  }
+  
   saveKraken();
   return { success: true, message: 'Ты присоединился к рейду!' };
 }
@@ -1878,10 +1974,7 @@ const now = Date.now();
   // Кракен атакует случайного игрока
   const target = raid.participants[Math.floor(Math.random() * raid.participants.length)];
   const krakenDamage = Math.floor(Math.random() * 20) + 5;
-  // В этой версии просто уведомляем об атаке Кракена
-  // (реальное здоровье игрока не уменьшается для простоты)
 
-// Проверка на завершение раунда
   raid.round++;
   if (raid.round > raid.maxRounds) {
     raid.status = 'finished';
@@ -1966,8 +2059,8 @@ const DAILY_QUESTS_POOL = [
   // Новые задания для ЭТАПА 3
   { id: 11, name: 'Выиграть морской бой', reward: 40, condition: (p) => (p.battleStats?.wins || 0) >= 1 },
   { id: 12, name: 'Участвовать в рейде на Кракена', reward: 30, condition: (p) => (p.krakenStats?.totalGames || 0) >= 1 },
-  { id: 13, name: 'Собрать 5 карт', reward: 25, condition: (p) => (p.cards?.length || 0) >= 5 },
-  { id: 14, name: 'Найти 1 сувенир', reward: 20, condition: (p) => (p.souvenirs?.items?.length || 0) >= 1 },
+  { id: 13, name: 'Собрать 5 карт', reward: 25, condition: (p) => (cardsData.collection[p.userId]?.length || 0) >= 5 },
+  { id: 14, name: 'Найти 1 сувенир', reward: 20, condition: (p) => (souvenirsData.collection[p.userId]?.length || 0) >= 1 },
   { id: 15, name: 'Выиграть 2 морских боя', reward: 50, condition: (p) => (p.battleStats?.wins || 0) >= 2 },
 ];
 
@@ -2115,8 +2208,6 @@ function checkLimit(id, gameType) {
 
 // 1.6: Восстановление энергии
 function refillEnergy(p) {
-  // Админу энергия не нужна
-  // Примечание: мы не можем получить id из p, поэтому проверка будет в местах списания
   const now = Date.now();
   const hours = Math.floor((now - (p.lastEnergyRefill || now)) / 3600000);
   if (hours > 0) {
@@ -2161,6 +2252,28 @@ function collectPassiveIncome(id) {
   if (p.incomeBonus) {
     earned = Math.floor(earned * (1 + p.incomeBonus / 100));
   }
+
+// ========== ИНВЕСТИЦИИ (автоначисление) ==========
+  if (p.investment && p.investment > 0) {
+    const investHours = (now - p.investmentTime) / 3600000;
+    if (investHours > 0) {
+      const investEarned = Math.floor(p.investment * p.investmentRate * investHours);
+      if (investEarned > 0) {
+        // Добавляем к пассивному доходу
+        earned += investEarned;
+        // Обновляем время, чтобы не начислять повторно
+        p.investmentTime = now;
+        // Сохраняем заработанное в историю
+        if (!p.investmentHistory) p.investmentHistory = [];
+        p.investmentHistory.push({
+          time: now,
+          type: 'passive',
+          amount: investEarned,
+          balance: p.investment
+        });
+      }
+    }
+  }
   
   if (earned > 0) {
     p.passiveCollected = safeNumber(p.passiveCollected) + earned;
@@ -2181,9 +2294,8 @@ function getPlayer(id) {
       dailyCounters: { date: new Date().toDateString(), games: {} },
       
       // ЧАСТЬ 2: Поля экономики
-      share: 0,          // 2.1: Доля в банке (0-20%)
-      sharePurchased: 0, // 2.1: Сколько потрачено на долю
-      // Старые поля
+      share: 0,
+      sharePurchased: 0,
       chestStats: { opened: 0, wins: 0, losses: 0, maxWin: 0 },
       balance: 10,
       demoBalance: 50,
@@ -2359,8 +2471,8 @@ function processLotteryDraw() {
   const jackpot = Math.floor(lotteryData.pool * 0.8);
   const commission = Math.floor(lotteryData.pool * 0.2);
   bank.commission = safeNumber(bank.commission) + commission;
-
-const winner = getPlayer(winnerId);
+  
+  const winner = getPlayer(winnerId);
   if (winner) {
     if (winner.demoMode) {
       winner.demoBalance = safeNumber(winner.demoBalance) + jackpot;
@@ -2406,8 +2518,8 @@ function finishGoldRush(gameId) {
   if (!p) return;
   
   const totalEarned = game.collected;
-  
-  if (totalEarned > 0) {
+
+if (totalEarned > 0) {
     if (p.demoMode) {
       p.demoBalance = safeNumber(p.demoBalance) + totalEarned;
     } else {
@@ -2592,8 +2704,8 @@ function endDailyTournament() {
     const firstPrize = Math.floor(prizePool * 0.5);
     const secondPrize = Math.floor(prizePool * 0.3);
     const thirdPrize = Math.floor(prizePool * 0.2);
-
-  // 1-е место
+    
+    // 1-е место
     const winner = getPlayer(sorted[0].id);
     if (winner) {
       if (winner.demoMode) {
@@ -2626,8 +2738,8 @@ function endDailyTournament() {
         ));
       }
     }
-    
-    // 3-е место
+
+  // 3-е место
     if (sorted.length > 2) {
       const third = getPlayer(sorted[2].id);
       if (third) {
@@ -2866,11 +2978,14 @@ function calculateTotalIncome(p) {
   return Math.floor(total * (1 + bonus / 100));
 }
 
-function checkachievements(id) {
-  const p = getplayer(id);
+function checkAchievements(id) {
+  const p = getPlayer(id);
   if (!p) return;
   const earned = p.achievements || [];
-  for (let ach of achievements) {
+  const userCards = cardsData.collection[id] || [];
+  const userSouvenirs = souvenirsData.collection[id] || [];
+  
+  for (let ach of ACHIEVEMENTS) {
     if (earned.includes(ach.id)) continue;
     let condition = false;
     switch (ach.id) {
@@ -2896,8 +3011,8 @@ function checkachievements(id) {
       // Новые достижения (ЭТАП 3)
       case 20: condition = (p.battleStats?.wins || 0) >= 10; break;
       case 21: condition = (p.krakenStats?.wins || 0) >= 5; break;
-      case 22: condition = (cardsData.collection[id]?.length || 0) >= 25; break;
-      case 23: condition = (souvenirsData.collection[id]?.length || 0) >= 5; break;
+      case 22: condition = userCards.length >= 25; break;
+      case 23: condition = userSouvenirs.length >= 5; break;
     }
     if (condition) {
       earned.push(ach.id);
@@ -3175,6 +3290,7 @@ function mainInlineKeyboard() {
       [{ text: '🃏 Карты', callback_data: 'menu_cards' }, { text: '🎁 Сувениры', callback_data: 'menu_souvenirs' }],
       [{ text: '⚔️ Морской бой', callback_data: 'menu_battle' }, { text: '🐙 Кракен', callback_data: 'menu_kraken' }],
       [{ text: '💰 Инвестиции', callback_data: 'menu_invest' }],
+      [{ text: '🃏 Крафт карт', callback_data: 'menu_craft' }],
     ]
   };
 }
@@ -3391,6 +3507,7 @@ function cardsKeyboard(userId) {
       [{ text: `🟣 Редкие: ${rare}`, callback_data: 'cards_rare' }],
       [{ text: `🟠 Легендарные: ${legendary}`, callback_data: 'cards_legendary' }],
       [{ text: `📊 Всего: ${total}/50`, callback_data: 'cards_all' }],
+      [{ text: '🃏 Крафт (3 дубликата → +1 редкость)', callback_data: 'menu_craft' }],
       [{ text: '🔙 Назад', callback_data: 'menu_main' }]
     ]
   };
@@ -3682,7 +3799,8 @@ function endTournament() {
       const thirdId = sorted[2];
       if (players[thirdId]) {
         if (players[thirdId].demoMode) {
-          players[thirdId].demoBalance = safeNumber(players[thirdId].demoBalance) + thirdPrize;
+          players[thirdId].demoBalance = safeNumber(players[thirdId].demoBalance) +
+            thirdPrize;
         } else {
           players[thirdId].balance = safeNumber(players[thirdId].balance) + thirdPrize;
         }
@@ -3790,7 +3908,7 @@ function updateDailyStats(id, gameType, result, betAmount) {
   
   saveData();
 
-const quests = checkDailyQuests(id);
+  const quests = checkDailyQuests(id);
   if (quests) {
     for (let q of quests) {
       if (typeof q.condition === 'function' && q.condition(p) && !(p.dailyQuestsCompleted || []).includes(q.id)) {
@@ -3819,6 +3937,38 @@ bot.onText(/\/weektop/, (msg) => {
 });
 
 // 5.2: Ежедневный турнир — команда уже добавлена выше (/tournament)
+
+// ==================== КРАФТ КАРТ ====================
+bot.onText(/\/craft/, async (msg) => {
+  const id = msg.chat.id;
+  const p = getPlayer(id);
+  if (!p) return;
+  
+  const result = craftCards(id);
+  if (result.error) {
+    bot.sendMessage(id, formatMessage('🃏 КРАФТ КАРТ', `❌ ${result.error}`), { reply_markup: backKeyboard() });
+    return;
+  }
+  
+  if (result.success) {
+    const balance = p.demoMode ? safeNumber(p.demoBalance) : safeNumber(p.balance);
+    const stats = getUserCardStats(id);
+    
+    const msg = `${result.phrase}\n\n` +
+      `♻️ ${result.oldCard.emoji} ${result.oldCard.name} (${result.oldCard.rarity}) ×${CRAFT_COST} → ${result.newCard.emoji} ${result.newCard.name} (${result.newCard.rarity})\n\n` +
+      `📊 Твоя коллекция:\n` +
+      `🟢 Обычных: ${stats.common || 0}\n` +
+      `🔵 Необычных: ${stats.uncommon || 0}\n` +
+      `🟣 Редких: ${stats.rare || 0}\n` +
+      `🟠 Легендарных: ${stats.legendary || 0}\n` +
+      `📊 Всего: ${stats.total || 0}/50\n\n` +
+      `💰 Баланс: ${balance} дуб.`;
+    
+    bot.sendMessage(id, formatMessage('🃏 КРАФТ УДАЛСЯ!', msg), {
+      reply_markup: cardsKeyboard(id)
+    });
+  }
+});
 
 // ==================== ИНВЕСТИЦИИ ====================
 bot.onText(/\/invest(?: (\d+))?/, async (msg, match) => {
@@ -3876,24 +4026,25 @@ bot.onText(/\/invest(?: (\d+))?/, async (msg, match) => {
   p.investment = (p.investment || 0) + amount;
   p.investmentTime = Date.now();
   
-  // Рассчитываем случайную доходность
-  const rate = Math.random() * (INVESTMENT_DAILY_RATE_MAX - INVESTMENT_DAILY_RATE_MIN) + INVESTMENT_DAILY_RATE_MIN;
-  p.investmentRate = rate;
+  // Рассчитываем случайную доходность (привязана к банку)
+  const bankMultiplier = Math.min(1 + (safeNumber(bank.pot) / 1000000) * 0.001, 2);
+  const rate = (Math.random() * (INVESTMENT_DAILY_RATE_MAX - INVESTMENT_DAILY_RATE_MIN) + INVESTMENT_DAILY_RATE_MIN) * bankMultiplier;
+  p.investmentRate = Math.min(rate, 0.05); // Максимум 5% в день
   
   if (!p.investmentHistory) p.investmentHistory = [];
   p.investmentHistory.push({
     time: Date.now(),
     type: 'invest',
     amount: amount,
-    rate: rate,
+    rate: p.investmentRate,
     balance: p.investment
   });
   
-  addHistory(id, `Инвестиция: +${amount} дуб. (доходность ${(rate*100).toFixed(1)}% в день)`);
+  addHistory(id, `Инвестиция: +${amount} дуб. (доходность ${(p.investmentRate*100).toFixed(1)}% в день)`);
   addBalanceHistory(id, -amount, `Инвестиция ${amount} дуб.`);
   saveData();
   
-  const ratePercent = (rate * 100).toFixed(1);
+  const ratePercent = (p.investmentRate * 100).toFixed(1);
   bot.sendMessage(id, formatMessage(
     '💰 ИНВЕСТИЦИЯ ПРИНЯТА!',
     `💰 Вложено: ${amount} дуб.\n📈 Доходность: ${ratePercent}% в день\n⏳ Инвестиция активирована!\n\nИспользуй /invest_status чтобы следить за доходом.`
@@ -3904,8 +4055,8 @@ bot.onText(/\/invest_withdraw/, async (msg) => {
   const id = msg.chat.id;
   const p = getPlayer(id);
   if (!p) return;
-  
-  const invested = p.investment || 0;
+
+           const invested = p.investment || 0;
   if (invested === 0) {
     bot.sendMessage(id, formatMessage('ИНВЕСТИЦИИ', '❌ У тебя нет активных инвестиций.'), { reply_markup: backKeyboard() });
     return;
@@ -3931,7 +4082,7 @@ bot.onText(/\/invest_withdraw/, async (msg) => {
   
   if (!p.investmentHistory) p.investmentHistory = [];
   p.investmentHistory.push({
-    time: Date.now(),
+    time: now,
     type: 'withdraw',
     amount: total,
     fee: fee,
@@ -3954,7 +4105,6 @@ bot.onText(/\/invest_withdraw/, async (msg) => {
 });
 
 bot.onText(/\/invest_status/, async (msg) => {
-  // Просто переадресуем на /invest
   const id = msg.chat.id;
   bot.emit('text', { chat: { id: id }, text: '/invest' });
 });
@@ -4041,8 +4191,8 @@ bot.onText(/\/lottery(?: (\d+))?/, async (msg, match) => {
     bot.sendMessage(id, formatMessage('ЛОТЕРЕЯ', `❌ Не хватает. Нужно ${totalCost} дуб., у тебя ${balance}.`), { reply_markup: backKeyboard() });
     return;
   }
-
-           if (p.demoMode) {
+  
+  if (p.demoMode) {
     p.demoBalance = safeNumber(p.demoBalance) - totalCost;
   } else {
     p.balance = safeNumber(p.balance) - totalCost;
@@ -4554,8 +4704,8 @@ bot.onText(/\/battle @(\w+) (\d+)/, async (msg, match) => {
     '⚔️ МОРСКОЙ БОЙ',
     `⛵ Ты вызвал @${targetUsername} на морской бой!\n💰 Ставка: ${bet} дуб.\n\nИспользуй /battle_shoot ${battleId} [A1-J10] чтобы стрелять.\nНачинает ${p.username}!`
   ));
-
-           bot.sendMessage(targetId, formatMessage(
+  
+  bot.sendMessage(targetId, formatMessage(
     '⚔️ МОРСКОЙ БОЙ',
     `⛵ @${p.username} вызывает тебя на морской бой!\n💰 Ставка: ${bet} дуб.\n\nИспользуй /battle_shoot ${battleId} [A1-J10] чтобы стрелять.\nНачинает ${p.username}!`
   ));
@@ -4742,8 +4892,8 @@ bot.onText(/\/kraken_attack (\w+)/, async (msg, match) => {
     }
     return;
   }
-  
-  // Атака
+
+            // Атака
   const result = attackKraken(raidId, id);
   if (result.error) {
     bot.sendMessage(id, formatMessage('КРАКЕН', `❌ ${result.error}`));
@@ -4756,8 +4906,8 @@ bot.onText(/\/kraken_attack (\w+)/, async (msg, match) => {
     const comm = Math.floor(totalPot * COMMISSION.kraken);
     const winAmount = Math.floor((totalPot - comm) / raid.participants.length);
     bank.commission = safeNumber(bank.commission) + comm;
-
-  for (let pid of raid.participants) {
+    
+    for (let pid of raid.participants) {
       const player = getPlayer(pid);
       if (player) {
         if (player.demoMode) {
@@ -4992,7 +5142,7 @@ bot.on('callback_query', async (query) => {
       bot.sendMessage(id, formatMessage('РУЛЕТКА', '❌ Ставка не найдена. Начни заново.'));
       return;
     }
-
+    
     const limitCheck = checkLimit(id, 'roulette');
     if (!limitCheck.allowed) {
       bot.sendMessage(id, formatMessage('РУЛЕТКА', limitCheck.reason), { reply_markup: backKeyboard() });
@@ -5183,7 +5333,7 @@ bot.on('callback_query', async (query) => {
     }
 
     const shareInfo = p.share > 0 ? `📊 Доля в банке: ${p.share}%` : '📊 Доля в банке: нет';
-    
+
     const cardStats = getUserCardStats(id);
     const souvenirCount = souvenirsData.collection[id]?.length || 0;
     const battleStats = p.battleStats || { wins: 0, losses: 0, totalGames: 0 };
@@ -5399,8 +5549,8 @@ bot.on('callback_query', async (query) => {
     });
     return;
   }
-  
-  // ==================== ТОП ====================
+
+    // ==================== ТОП ====================
   if (data === 'menu_top') {
     const sorted = Object.entries(players)
       .sort((a, b) => {
@@ -5585,7 +5735,7 @@ bot.on('callback_query', async (query) => {
     bot.sendMessage(id,
       formatMessage(
         '🏴‍☠️ ДОБРО ПОЖАЛОВАТЬ В ЧЁРНУЮ КОСТЬ!',
-        'Это пиратская игра на дублоны. Зарабатывай, повышай ранг, покупай долю в банке и выводи деньги!\n\n📖 КАК ИГРАТЬ:\n1. Нажми «🎰 Играть» и выбери режим\n2. Введи сумму ставки\n3. Жди результат\n\n🏴‍☠️ КАК ЗАРАБОТАТЬ:\n• Повышай ранг → пассивный доход\n• Покупай долю → доход от всех ставок\n• Забирай ежедневный бонус\n• Приводи друзей → +30 дуб.\n• Участвуй в турнирах\n• Собирай карты → бонусы к пассивному доходу\n• Находи сувениры → временные бонусы\n• Побеждай в морском бое и Кракене\n• Инвестируй дублоны → пассивный доход\n\n❓ Вопросы: @magistryu'
+        'Это пиратская игра на дублоны. Зарабатывай, повышай ранг, покупай долю в банке и выводи деньги!\n\n📖 КАК ИГРАТЬ:\n1. Нажми «🎰 Играть» и выбери режим\n2. Введи сумму ставки\n3. Жди результат\n\n🏴‍☠️ КАК ЗАРАБОТАТЬ:\n• Повышай ранг → пассивный доход\n• Покупай долю → доход от всех ставок\n• Забирай ежедневный бонус\n• Приводи друзей → +30 дуб.\n• Участвуй в турнирах\n• Собирай карты → бонусы к пассивному доходу\n• Находи сувениры → временные бонусы\n• Побеждай в морском бое и Кракене\n• Инвестируй дублоны → пассивный доход\n• Крафти карты → улучшай коллекцию\n\n🃏 КАРТЫ:\nВыпадают в играх и сундуках. Собирай коллекцию для бонусов!\n\n🎁 СУВЕНИРЫ:\nНаходятся случайно. Дают временные бонусы к удаче и доходу.\n\n⚔️ МОРСКОЙ БОЙ:\nИгра против другого игрока. Побеждай и получай дублоны!\n\n🐙 КРАКЕН:\nPvE-рейд против Кракена. Участвуй с командой и побеждай!\n\n❓ Вопросы: @magistryu'
       ),
       {
         reply_markup: backKeyboard()
@@ -5625,7 +5775,7 @@ bot.on('callback_query', async (query) => {
     if (id !== ADMIN_ID) {
       p.energy -= ENERGY_COST.chest;
     }
-
+    
     if (p.chestCooldown && p.chestCooldown > Date.now()) {
       const timeLeft = Math.ceil((p.chestCooldown - Date.now()) / 1000);
       bot.sendMessage(id, formatMessage('СУНДУК', `⏳ Подожди ${timeLeft} секунд перед следующим открытием.`));
@@ -5747,7 +5897,7 @@ bot.on('callback_query', async (query) => {
     return;
   }
 
-         // ==================== ЕЖЕДНЕВНЫЙ БОНУС ====================
+  // ==================== ЕЖЕДНЕВНЫЙ БОНУС ====================
   if (data === 'daily_bonus') {
     const today = new Date().toDateString();
     if (p.lastDailyDate === today) {
@@ -5846,7 +5996,7 @@ bot.on('callback_query', async (query) => {
     return;
   }
 
-  // ==================== ФЛОТ ====================
+    // ==================== ФЛОТ ====================
   if (data === 'menu_fleet') {
     const p = getPlayer(id);
     let msg = '🚢 ПИРАТСКИЙ ФЛОТ\n\n';
@@ -6161,7 +6311,7 @@ bot.on('callback_query', async (query) => {
       bot.sendMessage(id, formatMessage('КЛАССИКА', limitCheck.reason), { reply_markup: backKeyboard() });
       return;
     }
-    
+
     refillEnergy(p);
     if (id !== ADMIN_ID) {
       p.energy -= ENERGY_COST.classic;
@@ -6571,6 +6721,45 @@ bot.on('callback_query', async (query) => {
     msg += `\nФормат: ранг ИНДЕКС цена бонус пассив\nПример: ранг 2 500 15 8`;
     bot.sendMessage(id, formatMessage('РЕДАКТОР РАНГОВ', msg), { reply_markup: backKeyboard() });
     adminState[id] = { action: 'edit_ranks' };
+    return;
+  }
+
+  // ==================== КРАФТ КАРТ (МЕНЮ) ====================
+  if (data === 'menu_craft') {
+    const userCards = cardsData.collection[id] || [];
+    const cardCounts = {};
+    let hasDuplicates = false;
+    let duplicatesInfo = '';
+    
+    for (let cardId of userCards) {
+      cardCounts[cardId] = (cardCounts[cardId] || 0) + 1;
+    }
+    
+    for (let cardId in cardCounts) {
+      if (cardCounts[cardId] >= CRAFT_COST) {
+        hasDuplicates = true;
+        const card = CARDS.find(c => c.id === parseInt(cardId));
+        if (card) {
+          duplicatesInfo += `${card.emoji} ${card.name}: ${cardCounts[cardId]} шт.\n`;
+        }
+      }
+    }
+    
+    let msg = `🃏 КРАФТ КАРТ\n\n`;
+    msg += `📋 Для крафта нужно ${CRAFT_COST} одинаковых карты.\n`;
+    msg += `♻️ 3 дубликата → 1 карта на редкость выше.\n\n`;
+    
+    if (hasDuplicates) {
+      msg += `✅ Доступные дубликаты:\n${duplicatesInfo}\n`;
+      msg += `Используй /craft чтобы начать крафт!`;
+    } else {
+      msg += `❌ У тебя нет ${CRAFT_COST} одинаковых карт.\n`;
+      msg += `🎯 Собирай дубликаты в сундуках и играх!`;
+    }
+    
+    bot.sendMessage(id, formatMessage('КРАФТ КАРТ', msg), {
+      reply_markup: cardsKeyboard(id)
+    });
     return;
   }
 
@@ -6991,7 +7180,7 @@ bot.on('callback_query', async (query) => {
     const now = Date.now();
     const hours = Math.max(0, (now - (p.investmentTime || now)) / 3600000);
     const earned = Math.floor(invested * (p.investmentRate || 0.01) * hours);
-    
+
     let msg = `💰 ИНВЕСТИЦИИ\n\n`;
     if (invested === 0) {
       msg += `❌ У тебя нет активных инвестиций.\n\n`;
@@ -7282,8 +7471,8 @@ bot.on('message', async (msg) => {
         bot.sendMessage(id, formatMessage('💥 КОРАБЛЬ ПОТОПЛЕН!', `${result.message}\n\nПродолжай стрелять!`));
         return;
       }
-
-    if (result.result === 'hit') {
+      
+      if (result.result === 'hit') {
         bot.sendMessage(id, formatMessage('🎯 ПОПАДАНИЕ!', `${result.message}`));
         return;
       }
@@ -7497,7 +7686,7 @@ bot.on('message', async (msg) => {
       return;
     }
 
-   // ==================== БЛЭКДЖЕК ====================
+    // ==================== БЛЭКДЖЕК ====================
     if (p.currentMode === 'blackjack') {
       const limitCheck = checkLimit(id, 'blackjack');
       if (!limitCheck.allowed) {
@@ -7574,7 +7763,7 @@ bot.on('message', async (msg) => {
     }
   }
 
-  // ==================== ГЛАВНОЕ МЕНЮ (ПО УМОЛЧАНИЮ) ====================
+       // ==================== ГЛАВНОЕ МЕНЮ (ПО УМОЛЧАНИЮ) ====================
   if (!text.startsWith('/')) {
     bot.sendMessage(id, formatMessage('🏴‍☠️ ЧЁРНАЯ КОСТЬ', 'Главное меню:'), {
       reply_markup: mainInlineKeyboard()
@@ -7774,6 +7963,64 @@ setInterval(() => {
   }
 }, 60000);
 
+// ==================== АВТОЗАВЕРШЕНИЕ МОРСКОГО БОЯ ПО ТАЙМАУТУ ====================
+setInterval(() => {
+  const now = Date.now();
+  for (let battleId in battlesData) {
+    const battle = battlesData[battleId];
+    if (battle.status !== 'active') continue;
+    if (now - battle.lastMove > 5 * 60 * 1000) { // 5 минут
+      // Автоматическое поражение того, чей ход
+      const loserId = battle.turn;
+      const winnerId = battle.challengerId === loserId ? battle.opponentId : battle.challengerId;
+      
+      battle.status = 'finished';
+      battle.winner = winnerId;
+      
+      const loser = getPlayer(loserId);
+      const winner = getPlayer(winnerId);
+
+    if (loser) {
+        loser.battleStats.losses++;
+        loser.battleStats.totalGames++;
+        bot.sendMessage(loserId, formatMessage('⏰ ТАЙМАУТ!', '⛵ Ты проиграл морской бой из-за бездействия!'));
+      }
+      
+      if (winner) {
+        winner.battleStats.wins++;
+        winner.battleStats.totalGames++;
+        const totalPot = battle.bet * 2;
+        const comm = Math.floor(totalPot * COMMISSION.battle);
+        const winAmount = totalPot - comm;
+        bank.commission = safeNumber(bank.commission) + comm;
+        if (winner.demoMode) {
+          winner.demoBalance = safeNumber(winner.demoBalance) + winAmount;
+        } else {
+          winner.balance = safeNumber(winner.balance) + winAmount;
+        }
+        winner.totalEarned = safeNumber(winner.totalEarned) + winAmount;
+        addHistory(winnerId, `Морской бой: победа по таймауту +${winAmount} дуб. (комиссия ${comm})`);
+        addBalanceHistory(winnerId, winAmount, 'Морской бой победа (таймаут)');
+        checkAchievements(winnerId);
+        bot.sendMessage(winnerId, formatMessage('🏆 ПОБЕДА ПО ТАЙМАУТУ!', `⛵ @${loser?.username || loserId} бездействовал! Ты победил!\n💰 Выигрыш: ${winAmount} дуб. (комиссия ${comm})`));
+      }
+      
+      saveData();
+      saveBattles();
+      delete battlesData[battleId];
+    }
+  }
+}, 60 * 1000);
+
+// ==================== АВТОСБОР ПАССИВНОГО ДОХОДА ====================
+setInterval(() => {
+  for (let id in players) {
+    const p = players[id];
+    if (!p) continue;
+    collectPassiveIncome(id);
+  }
+}, 60 * 1000);
+
 bot.onText(/\/menu/, (msg) => {
   const id = msg.chat.id;
   const p = getPlayer(id);
@@ -7816,6 +8063,7 @@ bot.setMyCommands([
   { command: 'invest', description: 'Вложить дублоны' },
   { command: 'invest_withdraw', description: 'Вывести инвестиции' },
   { command: 'invest_status', description: 'Статус инвестиций' },
+  { command: 'craft', description: 'Крафт карт (3 дубликата → +1 редкость)' },
 ]);
 
 bot.onText(/\/start/, async (msg) => {
@@ -7937,7 +8185,7 @@ bot.onText(/\/menu/, (msg) => {
   });
 });
 
-console.log('🏴‍☠️ ЧЁРНАЯ КОСТЬ v21.0 — ВСЕ ЧАСТИ 1-7 + ОБНОВЛЕНИЯ ГОТОВЫ!');
+console.log('🏴‍☠️ ЧЁРНАЯ КОСТЬ v22.0 — ВСЕ ФУНКЦИИ РЕАЛИЗОВАНЫ!');
 console.log('✅ Система доступа (Free/Premium/Legendary)');
 console.log('✅ Лимиты и энергия');
 console.log('✅ Telegram Premium интеграция');
@@ -7952,10 +8200,15 @@ console.log('✅ Карты (50 карт, 4 редкости)');
 console.log('✅ Сувениры (10 сувениров, временные бонусы)');
 console.log('✅ Морской бой (PvP)');
 console.log('✅ Кракен (PvE-рейд)');
-console.log('✅ Инвестиции (пассивный доход)');
+console.log('✅ Инвестиции (пассивный доход с привязкой к банку)');
+console.log('✅ Крафт карт (3 дубликата → +1 редкость)');
 console.log('✅ Новые достижения (морской бой, кракен, карты, сувениры)');
 console.log('✅ Новые ежедневные задания');
 console.log('✅ Чёткое расписание событий (12:00 и 20:00 UTC)');
+console.log('✅ Автосбор пассивного дохода (каждую минуту)');
+console.log('✅ Автозавершение морского боя по таймауту (5 минут)');
+console.log('✅ Автостарт рейда на Кракена (при 5 участниках)');
+console.log('✅ Обновлённая справка /help');
 console.log(`👥 Игроков: ${Object.keys(players).length}`);
 console.log(`💰 Банк: ${safeNumber(bank.pot)}, Джекпот: ${safeNumber(bank.jackpot)}`);
 
