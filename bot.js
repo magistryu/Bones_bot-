@@ -2059,8 +2059,15 @@ const DAILY_QUESTS_POOL = [
   // Новые задания для ЭТАПА 3
   { id: 11, name: 'Выиграть морской бой', reward: 40, condition: (p) => (p.battleStats?.wins || 0) >= 1 },
   { id: 12, name: 'Участвовать в рейде на Кракена', reward: 30, condition: (p) => (p.krakenStats?.totalGames || 0) >= 1 },
-  { id: 13, name: 'Собрать 5 карт', reward: 25, condition: (p) => (cardsData.collection[p.userId]?.length || 0) >= 5 },
-  { id: 14, name: 'Найти 1 сувенир', reward: 20, condition: (p) => (souvenirsData.collection[p.userId]?.length || 0) >= 1 },
+  { id: 13, name: 'Собрать 5 карт', reward: 25, condition: (p) => {
+    // Нужен доступ к id игрока, используем глобальную переменную
+    const userId = Object.keys(players).find(key => players[key] === p);
+    return (cardsData.collection[userId]?.length || 0) >= 5;
+  }},
+  { id: 14, name: 'Найти 1 сувенир', reward: 20, condition: (p) => {
+    const userId = Object.keys(players).find(key => players[key] === p);
+    return (souvenirsData.collection[userId]?.length || 0) >= 1;
+  }},
   { id: 15, name: 'Выиграть 2 морских боя', reward: 50, condition: (p) => (p.battleStats?.wins || 0) >= 2 },
 ];
 
