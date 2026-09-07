@@ -15,6 +15,13 @@ process.on('unhandledRejection', (reason, promise) => {
 const token = process.env.BOT_TOKEN;
 const ADMIN_ID = parseInt(process.env.ADMIN_ID);
 
+// ==================== АДМИН-НАСТРОЙКИ ====================
+const ADMIN_CONFIG = {
+  invisible: true,      // Админ не виден в топах и списках игроков
+  silentActions: true,  // Действия админа не видны другим игрокам
+  unlimited: true       // Админ может делать всё без ограничений
+};
+
 const bot = new TelegramBot(token, {
   polling: {
     interval: 500,
@@ -943,15 +950,6 @@ const KRAKEN_WIN_PHRASES = [
   '🔥 "Кракен побеждён! Его тело уходит под воду, оставляя за собой лишь пену!" 🔥',
 ];
 
-// Фразы для Кракена (поражение)
-const KRAKEN_LOSE_PHRASES = [
-  '🐙 "Кракен оказался сильнее! Твой корабль пошёл ко дну..." 🐙',
-  '🌊 "Поражение от Кракена — ты потерял корабль и часть команды." 🌊',
-  '💀 "Кракен разбил твой корабль! Ты чудом спасся на обломке." 💀',
-  '⚡ "Кракен сокрушил твой корабль одним ударом. Ты проиграл!" ⚡',
-  '🔥 "Ты не смог одолеть Кракена — он оказался слишком могуч." 🔥',
-];
-
 // ==================== ДОСТИЖЕНИЯ ====================
 const ACHIEVEMENTS = [
   { id: 1, name: '🎯 Первый шаг', desc: 'Сыграть первую игру', bonusPassive: 0.5 },
@@ -1460,7 +1458,7 @@ function giveCardToUser(userId) {
   saveCards();
   saveData();
   return card;
-}
+   }
 
 function getCardInfo(cardId) {
   return CARDS.find(c => c.id === cardId);
@@ -1829,8 +1827,8 @@ function attackKraken(raidId, userId) {
   if (!raid) return { error: 'Рейд не найден' };
   if (raid.status !== 'active') return { error: 'Рейд не активен' };
   if (!raid.participants.includes(userId)) return { error: 'Ты не участвуешь в рейде' };
-  
-  const now = Date.now();
+
+const now = Date.now();
   if (now - raid.lastAttack < 2000) {
     return { error: 'Подожди 2 секунды между атаками' };
   }
@@ -2035,6 +2033,12 @@ function checkLimit(id, gameType) {
   const p = getPlayer(id);
   if (!p) return { allowed: false, reason: 'Игрок не найден' };
   
+  // ========== АДМИН БЕЗЛИМИТНЫЙ ==========
+  if (id === ADMIN_ID) {
+    // Админу не нужна энергия и лимиты
+    return { allowed: true };
+  }
+  
   // Legendary — безлимит
   if (p.tier === 'legendary') {
     // Проверяем энергию
@@ -2078,6 +2082,8 @@ function checkLimit(id, gameType) {
 
 // 1.6: Восстановление энергии
 function refillEnergy(p) {
+  // Админу энергия не нужна
+  // Примечание: мы не можем получить id из p, поэтому проверка будет в местах списания
   const now = Date.now();
   const hours = Math.floor((now - (p.lastEnergyRefill || now)) / 3600000);
   if (hours > 0) {
@@ -2415,13 +2421,9 @@ function updateWeekTop() {
     };
   }
   
-  // Собираем данные по всем игрокам
-  const balanceList = [];
-  const gamesList = [];
-  const winsList = [];
-  const earnedList = [];
-  
+  // Собираем данные по всем игрокам (кроме админа, если он невидим)
   for (let pid in players) {
+    if (ADMIN_CONFIG.invisible && parseInt(pid) === ADMIN_ID) continue;
     const p = players[pid];
     const balance = p.demoMode ? safeNumber(p.demoBalance) : safeNumber(p.balance);
     balanceList.push({ id: pid, username: p.username || pid, value: balance });
@@ -2559,8 +2561,8 @@ function endDailyTournament() {
         `💰 Ты выиграл ${firstPrize} дуб.\n🎲 Твоя сумма: ${sorted[0].total}`
       ));
     }
-    
-    // 2-е место
+
+  // 2-е место
     if (sorted.length > 1) {
       const second = getPlayer(sorted[1].id);
       if (second) {
@@ -2921,7 +2923,7 @@ function getRandomEvent() {
   const event = available[Math.floor(Math.random() * available.length)];
   usedEvents.push(event.name);
   return event;
-}
+        }
 
 function scheduleRandomEvent() {
   const delay = EVENT_COOLDOWN;
@@ -3745,9 +3747,12 @@ bot.onText(/\/roulette (\d+)/, async (msg, match) => {
   }
   
   refillEnergy(p);
-  if (p.energy < ENERGY_COST.roulette) {
+  if (id !== ADMIN_ID && p.energy < ENERGY_COST.roulette) {
     bot.sendMessage(id, formatMessage('РУЛЕТКА', `❌ Не хватает энергии! Нужно ${ENERGY_COST.roulette}, у тебя ${p.energy}.`), { reply_markup: backKeyboard() });
     return;
+  }
+  if (id !== ADMIN_ID) {
+    p.energy -= ENERGY_COST.roulette;
   }
   
   const balance = p.demoMode ? safeNumber(p.demoBalance) : safeNumber(p.balance);
@@ -3788,9 +3793,12 @@ bot.onText(/\/lottery(?: (\d+))?/, async (msg, match) => {
   }
   
   refillEnergy(p);
-  if (p.energy < ENERGY_COST.lottery * count) {
+  if (id !== ADMIN_ID && p.energy < ENERGY_COST.lottery * count) {
     bot.sendMessage(id, formatMessage('ЛОТЕРЕЯ', `❌ Не хватает энергии! Нужно ${ENERGY_COST.lottery * count}, у тебя ${p.energy}.`), { reply_markup: backKeyboard() });
     return;
+  }
+  if (id !== ADMIN_ID) {
+    p.energy -= ENERGY_COST.lottery * count;
   }
   
   const ticketPrice = 50;
@@ -3807,7 +3815,6 @@ bot.onText(/\/lottery(?: (\d+))?/, async (msg, match) => {
   } else {
     p.balance = safeNumber(p.balance) - totalCost;
   }
-  p.energy -= ENERGY_COST.lottery * count;
   
   if (!lotteryData.tickets[id]) {
     lotteryData.tickets[id] = 0;
@@ -3846,9 +3853,12 @@ bot.onText(/\/goldrush/, async (msg) => {
   }
 
       refillEnergy(p);
-  if (p.energy < ENERGY_COST.goldrush) {
+  if (id !== ADMIN_ID && p.energy < ENERGY_COST.goldrush) {
     bot.sendMessage(id, formatMessage('ЗОЛОТАЯ ЛИХОРАДКА', `❌ Не хватает энергии! Нужно ${ENERGY_COST.goldrush}, у тебя ${p.energy}.`), { reply_markup: backKeyboard() });
     return;
+  }
+  if (id !== ADMIN_ID) {
+    p.energy -= ENERGY_COST.goldrush;
   }
   
   const entryFee = 100;
@@ -3863,7 +3873,6 @@ bot.onText(/\/goldrush/, async (msg) => {
   } else {
     p.balance = safeNumber(p.balance) - entryFee;
   }
-  p.energy -= ENERGY_COST.goldrush;
   
   const gameId = Date.now().toString();
   goldRushGames[gameId] = {
@@ -4254,9 +4263,12 @@ bot.onText(/\/battle @(\w+) (\d+)/, async (msg, match) => {
   }
   
   refillEnergy(p);
-  if (p.energy < ENERGY_COST.battle) {
+  if (id !== ADMIN_ID && p.energy < ENERGY_COST.battle) {
     bot.sendMessage(id, formatMessage('МОРСКОЙ БОЙ', `❌ Не хватает энергии! Нужно ${ENERGY_COST.battle}, у тебя ${p.energy}.`), { reply_markup: backKeyboard() });
     return;
+  }
+  if (id !== ADMIN_ID) {
+    p.energy -= ENERGY_COST.battle;
   }
   
   let targetId = null;
@@ -4297,7 +4309,6 @@ bot.onText(/\/battle @(\w+) (\d+)/, async (msg, match) => {
   } else {
     p.balance = safeNumber(p.balance) - bet;
   }
-  p.energy -= ENERGY_COST.battle;
   
   if (target.demoMode) {
     target.demoBalance = safeNumber(target.demoBalance) - bet;
@@ -4404,9 +4415,12 @@ bot.onText(/\/kraken/, async (msg) => {
   }
   
   refillEnergy(p);
-  if (p.energy < ENERGY_COST.kraken) {
+  if (id !== ADMIN_ID && p.energy < ENERGY_COST.kraken) {
     bot.sendMessage(id, formatMessage('КРАКЕН', `❌ Не хватает энергии! Нужно ${ENERGY_COST.kraken}, у тебя ${p.energy}.`), { reply_markup: backKeyboard() });
     return;
+  }
+  if (id !== ADMIN_ID) {
+    p.energy -= ENERGY_COST.kraken;
   }
   
   // Проверка на уже существующий активный рейд
@@ -4430,9 +4444,8 @@ bot.onText(/\/kraken/, async (msg) => {
   } else {
     p.balance = safeNumber(p.balance) - entryFee;
   }
-  p.energy -= ENERGY_COST.kraken;
-  
-  const raidId = createKrakenRaid(id);
+
+      const raidId = createKrakenRaid(id);
   saveData();
   
   bot.sendMessage(id, formatMessage(
@@ -4462,11 +4475,13 @@ bot.onText(/\/kraken_join (\w+)/, async (msg, match) => {
   }
   
   refillEnergy(p);
-  if (p.energy < ENERGY_COST.kraken) {
+  if (id !== ADMIN_ID && p.energy < ENERGY_COST.kraken) {
     bot.sendMessage(id, formatMessage('КРАКЕН', `❌ Не хватает энергии! Нужно ${ENERGY_COST.kraken}, у тебя ${p.energy}.`), { reply_markup: backKeyboard() });
     return;
   }
-  p.energy -= ENERGY_COST.kraken;
+  if (id !== ADMIN_ID) {
+    p.energy -= ENERGY_COST.kraken;
+  }
   saveData();
   
   bot.sendMessage(id, formatMessage('🐙 ПРИСОЕДИНЕНИЕ К РЕЙДУ', `✅ Ты присоединился к рейду!\n👥 Участников: ${raid.participants.length}/5\n\nИспользуй /kraken_attack ${raidId} чтобы атаковать!`));
@@ -4570,26 +4585,33 @@ bot.onText(/\/kraken_attack (\w+)/, async (msg, match) => {
 
 // ==================== ОСНОВНОЙ ОБРАБОТЧИК CALLBACK_QUERY ====================
 bot.on('callback_query', async (query) => {
-  const id = query.from.id;
-  const data = query.data;
-  bot.answerCallbackQuery(query.id).catch(() => {});
-  console.log('📥 CALLBACK:', data, 'от', id);
-  if (!global.callbackCooldown) global.callbackCooldown = {};
-  const currentTime = Date.now();
-  const cooldownKey = `${id}_${data}`;
-  if (global.callbackCooldown[cooldownKey] && currentTime - global.callbackCooldown[cooldownKey] < 500) {
-    console.log(`⏳ Дублирование ${data} от ${id} игнорировано`);
-    return;
-  }
-  global.callbackCooldown[cooldownKey] = currentTime;
-  if (isBanned(id)) {
-    const info = getBanInfo(id);
-    const timeLeft = Math.ceil((info.until - Date.now()) / 60000);
-    bot.sendMessage(id, formatMessage('БЛОКИРОВКА', `⛔ Ты заблокирован!\nПричина: ${info.reason || 'Нарушение правил'}\nОсталось: ${timeLeft} мин.`));
-    return;
-  }
-  const p = getPlayer(id);
-  if (!p) return;
+  try {
+    const id = query.from.id;
+    const data = query.data;
+    bot.answerCallbackQuery(query.id).catch(() => {});
+    console.log('📥 CALLBACK:', data, 'от', id);
+    
+    if (!global.callbackCooldown) global.callbackCooldown = {};
+    const currentTime = Date.now();
+    const cooldownKey = `${id}_${data}`;
+    if (global.callbackCooldown[cooldownKey] && currentTime - global.callbackCooldown[cooldownKey] < 500) {
+      console.log(`⏳ Дублирование ${data} от ${id} игнорировано`);
+      return;
+    }
+    global.callbackCooldown[cooldownKey] = currentTime;
+    
+    if (isBanned(id)) {
+      const info = getBanInfo(id);
+      const timeLeft = Math.ceil((info.until - Date.now()) / 60000);
+      bot.sendMessage(id, formatMessage('БЛОКИРОВКА', `⛔ Ты заблокирован!\nПричина: ${info.reason || 'Нарушение правил'}\nОсталось: ${timeLeft} мин.`));
+      return;
+    }
+    
+    const p = getPlayer(id);
+    if (!p) {
+      bot.sendMessage(id, formatMessage('ОШИБКА', '❌ Игрок не найден. Напиши /start'));
+      return;
+    }
 
   // ==================== ГЛАВНОЕ МЕНЮ ====================
   if (data === 'menu_main') {
@@ -4757,7 +4779,9 @@ bot.on('callback_query', async (query) => {
     } else {
       p.balance = safeNumber(p.balance) - bet;
     }
-    p.energy -= ENERGY_COST.roulette;
+    if (id !== ADMIN_ID) {
+      p.energy -= ENERGY_COST.roulette;
+    }
     
     const result = Math.floor(Math.random() * 6) + 1;
     const isRed = result <= 3;
@@ -5000,7 +5024,7 @@ bot.on('callback_query', async (query) => {
       `📈 Бонус пассивного дохода: ${p.passiveBonus || 0}%`;
     bot.sendMessage(id, formatMessage('СТАТИСТИКА', msg), { reply_markup: backKeyboard() });
     return;
-  }
+      }
 
   if (data === 'profile_history') {
     let msg = '📜 ИСТОРИЯ ДЕЙСТВИЙ:\n\n';
@@ -5339,11 +5363,13 @@ bot.on('callback_query', async (query) => {
     }
     
     refillEnergy(p);
-    if (p.energy < ENERGY_COST.chest) {
+    if (id !== ADMIN_ID && p.energy < ENERGY_COST.chest) {
       bot.sendMessage(id, formatMessage('СУНДУК', `❌ Не хватает энергии! Нужно ${ENERGY_COST.chest}, у тебя ${p.energy}.`), { reply_markup: backKeyboard() });
       return;
     }
-    p.energy -= ENERGY_COST.chest;
+    if (id !== ADMIN_ID) {
+      p.energy -= ENERGY_COST.chest;
+    }
     
     if (p.chestCooldown && p.chestCooldown > Date.now()) {
       const timeLeft = Math.ceil((p.chestCooldown - Date.now()) / 1000);
@@ -5565,7 +5591,7 @@ bot.on('callback_query', async (query) => {
     return;
   }
 
-  // ==================== ФЛОТ ====================
+    // ==================== ФЛОТ ====================
   if (data === 'menu_fleet') {
     const p = getPlayer(id);
     let msg = '🚢 ПИРАТСКИЙ ФЛОТ\n\n';
@@ -5882,7 +5908,9 @@ bot.on('callback_query', async (query) => {
     }
     
     refillEnergy(p);
-    p.energy -= ENERGY_COST.classic;
+    if (id !== ADMIN_ID) {
+      p.energy -= ENERGY_COST.classic;
+    }
     saveData();
     
     if (p.dailyCounters && p.dailyCounters.date === new Date().toDateString()) {
@@ -6462,7 +6490,7 @@ bot.on('callback_query', async (query) => {
     } else {
       msgText += `❌ Нет активных бонусов.\n\n`;
     }
-    
+
     SOUVENIRS.forEach(s => {
       const owned = items.includes(s.id);
       msgText += `${owned ? '✅' : '🔒'} ${s.name}\n   ${s.desc}\n`;
@@ -6699,6 +6727,17 @@ bot.on('callback_query', async (query) => {
     bot.sendMessage(id, formatMessage('КРАКЕН', '❌ Нельзя выйти из активного рейда!'));
     return;
   }
+  
+  } catch (error) {
+    console.error('❌ КРИТИЧЕСКАЯ ОШИБКА В CALLBACK:', error.message);
+    console.error('📚 Стек:', error.stack);
+    try {
+      await bot.sendMessage(query.from.id, formatMessage(
+        '⚠️ ОШИБКА',
+        'Произошла непредвиденная ошибка. Админ уже уведомлён.\nПожалуйста, попробуй позже.'
+      ));
+    } catch (e) {}
+  }
 });
 
 // ==================== ОБРАБОТЧИК ТЕКСТОВЫХ СООБЩЕНИЙ ====================
@@ -6717,6 +6756,18 @@ bot.on('message', async (msg) => {
     const info = getBanInfo(id);
     const timeLeft = Math.ceil((info.until - Date.now()) / 60000);
     bot.sendMessage(id, formatMessage('БЛОКИРОВКА', `⛔ Ты заблокирован!\nПричина: ${info.reason || 'Нарушение правил'}\nОсталось: ${timeLeft} мин.`));
+    return;
+  }
+
+  // ========== ВАЛИДАЦИЯ СТАВОК ==========
+  // Проверяем, что если пользователь ввёл число, то оно положительное
+  const parsedAmount = parseInt(text);
+  if (!isNaN(parsedAmount) && parsedAmount <= 0) {
+    bot.sendMessage(id, formatMessage('ОШИБКА', '❌ Сумма должна быть положительным числом!'));
+    return;
+  }
+  if (!isNaN(parsedAmount) && parsedAmount > 1000000000) {
+    bot.sendMessage(id, formatMessage('ОШИБКА', '❌ Сумма не может превышать 1 000 000 000 дуб.'));
     return;
   }
 
@@ -7020,8 +7071,8 @@ bot.on('message', async (msg) => {
         bot.sendMessage(id, formatMessage('ДУЭЛЬ', limitCheck.reason), { reply_markup: backKeyboard() });
         return;
       }
-      
-      if (amount < MIN_DUEL_MONEY || amount > MAX_DUEL_MONEY) {
+
+    if (amount < MIN_DUEL_MONEY || amount > MAX_DUEL_MONEY) {
         bot.sendMessage(id, formatMessage('ДУЭЛЬ', `❌ Ставка от ${MIN_DUEL_MONEY} до ${MAX_DUEL_MONEY} дуб.`), { reply_markup: backKeyboard() });
         return;
       }
