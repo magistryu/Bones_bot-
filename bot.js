@@ -3260,20 +3260,40 @@ async function sendDiceAnimation(chatId, playerDice1, playerDice2, bankDice1, ba
 // ==================== АНИМАЦИЯ БЛЭКДЖЕК ====================
 async function sendBlackjackAnimation(chatId, playerCard1, playerCard2, dealerCard1, dealerCard2) {
   try {
-    await sleep(1000);
+    // ПАУЗА ПЕРЕД НАЧАЛОМ
+    await sleep(1500);
     
+    // ПОКАЗЫВАЕМ ПЕРВУЮ КАРТУ ИГРОКА
     const pCard1 = getCardSticker(playerCard1);
+    if (pCard1) {
+      await bot.sendSticker(chatId, pCard1).catch(() => {});
+      await sleep(1500); // 1.5 сек пауза
+    }
+    
+    // ПОКАЗЫВАЕМ ВТОРУЮ КАРТУ ИГРОКА
     const pCard2 = getCardSticker(playerCard2);
-    if (pCard1) await bot.sendSticker(chatId, pCard1).catch(() => {});
-    if (pCard2) await bot.sendSticker(chatId, pCard2).catch(() => {});
-    await sleep(1000);
+    if (pCard2) {
+      await bot.sendSticker(chatId, pCard2).catch(() => {});
+      await sleep(2000); // 2 сек пауза
+    }
     
+    // ПОКАЗЫВАЕМ ПЕРВУЮ КАРТУ ДИЛЕРА
     const dCard1 = getCardSticker(dealerCard1);
-    if (dCard1) await bot.sendSticker(chatId, dCard1).catch(() => {});
-    await sleep(500);
+    if (dCard1) {
+      await bot.sendSticker(chatId, dCard1).catch(() => {});
+      await sleep(2000); // 2 сек пауза
+    }
     
+    // ПОКАЗЫВАЕМ ЗАКРЫТУЮ КАРТУ ДИЛЕРА (рубашкой)
     await bot.sendSticker(chatId, STICKERS.bj_card_back).catch(() => {});
-    await sleep(500);
+    await sleep(2000); // 2 сек пауза
+    
+    // ПОКАЗЫВАЕМ ОТКРЫТУЮ КАРТУ ДИЛЕРА (если нужно)
+    const dCard2 = getCardSticker(dealerCard2);
+    if (dCard2) {
+      await bot.sendSticker(chatId, dCard2).catch(() => {});
+      await sleep(1000);
+    }
     
   } catch (e) {
     console.log('⚠️ Ошибка анимации блэкджека:', e.message);
@@ -3325,10 +3345,12 @@ function mainInlineKeyboard() {
       [{ text: '🎮 Демо-режим', callback_data: 'menu_demo' }, { text: '❓ Помощь', callback_data: 'menu_help' }],
       [{ text: '🏆 Топ', callback_data: 'menu_top' }, { text: '💰 Банк', callback_data: 'menu_bank' }],
       [{ text: '🏆 Недельный топ', callback_data: 'menu_weektop' }],
+      [{ text: '👑 Купить Premium', callback_data: 'buy_premium' }, { text: '👑 Купить Legendary', callback_data: 'buy_legendary' }], // <-- НОВАЯ СТРОКА
       [{ text: '🃏 Карты', callback_data: 'menu_cards' }, { text: '🎁 Сувениры', callback_data: 'menu_souvenirs' }],
       [{ text: '⚔️ Морской бой', callback_data: 'menu_battle' }, { text: '🐙 Кракен', callback_data: 'menu_kraken' }],
       [{ text: '💰 Инвестиции', callback_data: 'menu_invest' }],
       [{ text: '🃏 Крафт карт', callback_data: 'menu_craft' }],
+      [{ text: '😂 Анекдот', callback_data: 'menu_joke' }], // <-- НОВАЯ СТРОКА
     ]
   };
 }
@@ -5782,6 +5804,95 @@ bot.on('callback_query', async (query) => {
     return;
   }
 
+    // ==================== АНЕКДОТЫ ====================
+if (data === 'menu_joke') {
+  const joke = JOKES[Math.floor(Math.random() * JOKES.length)];
+  bot.sendMessage(id, formatMessage('😂 ПИРАТСКИЙ АНЕКДОТ', joke), {
+    reply_markup: {
+      inline_keyboard: [
+        [{ text: '😂 Ещё анекдот', callback_data: 'menu_joke' }],
+        [{ text: '🔙 Назад', callback_data: 'menu_main' }]
+      ]
+    }
+  });
+  return;
+}
+    
+    // ==================== ПОКУПКА PREMIUM ====================
+if (data === 'buy_premium') {
+  const prices = LEGENDARY_PRICES;
+  let msg = '👑 КУПИТЬ PREMIUM\n\n';
+  msg += '⭐ Premium даёт:\n';
+  msg += '✅ Увеличенные лимиты игр\n';
+  msg += '✅ Энергия: 25\n';
+  msg += '✅ Доступ к VIP-играм\n\n';
+  msg += `💰 Цены:\n`;
+  msg += `📅 1 месяц — ${prices.month} дуб.\n`;
+  msg += `📅 3 месяца — ${prices.threeMonths} дуб.\n`;
+  msg += `📅 6 месяцев — ${prices.sixMonths} дуб.\n`;
+  msg += `📅 1 год — ${prices.year} дуб.\n\n`;
+  msg += `Выбери срок:`;
+  
+  bot.sendMessage(id, formatMessage('ПРЕМИУМ', msg), {
+    reply_markup: {
+      inline_keyboard: [
+        [{ text: '1 месяц (599)', callback_data: 'premium_1m' }],
+        [{ text: '3 месяца (1500)', callback_data: 'premium_3m' }],
+        [{ text: '6 месяцев (2500)', callback_data: 'premium_6m' }],
+        [{ text: '1 год (4000)', callback_data: 'premium_1y' }],
+        [{ text: '🔙 Назад', callback_data: 'menu_main' }]
+      ]
+    }
+  });
+  return;
+}
+
+// ==================== ПОКУПКА LEGENDARY ====================
+if (data === 'buy_legendary') {
+  let msg = '👑 КУПИТЬ LEGENDARY\n\n';
+  msg += '👑 Legendary даёт:\n';
+  msg += '✅ Безлимитные игры\n';
+  msg += '✅ Энергия: 50\n';
+  msg += '✅ Доход от доли в банке\n';
+  msg += '✅ Все преимущества Premium\n\n';
+  msg += `💰 Цена: ${LEGENDARY_PRICES.month} дуб./мес.\n`;
+  msg += `Используй /buy_legendary [месяцев] чтобы купить.`;
+  
+  bot.sendMessage(id, formatMessage('LEGENDARY', msg), {
+    reply_markup: backKeyboard()
+  });
+  return;
+}
+
+// ==================== ОФОРМЛЕНИЕ PREMIUM ====================
+if (data.startsWith('premium_')) {
+  const period = data.split('_')[1];
+  const prices = {
+    '1m': LEGENDARY_PRICES.month,
+    '3m': LEGENDARY_PRICES.threeMonths,
+    '6m': LEGENDARY_PRICES.sixMonths,
+    '1y': LEGENDARY_PRICES.year
+  };
+  const months = { '1m': 1, '3m': 3, '6m': 6, '1y': 12 };
+  
+  const price = prices[period];
+  const month = months[period];
+  
+  if (p.demoMode) return bot.sendMessage(id, formatMessage('ПРЕМИУМ', '❌ В демо-режиме недоступно.'));
+  if (safeNumber(p.balance) < price) {
+    return bot.sendMessage(id, formatMessage('ПРЕМИУМ', `❌ Не хватает ${price} дуб.`));
+  }
+  
+  p.balance = safeNumber(p.balance) - price;
+  p.tier = 'premium';
+  p.tierExpiry = Date.now() + month * 30 * 24 * 3600000;
+  updateMaxEnergy(p);
+  saveData();
+  
+  bot.sendMessage(id, formatMessage('✅ ПРЕМИУМ АКТИВИРОВАН!', `⭐ Premium на ${month} месяц(ев)!`));
+  return;
+}
+
   // ==================== СУНДУКИ ====================
   if (data === 'menu_chest') {
     const limitCheck = checkLimit(id, 'chest');
@@ -7285,8 +7396,9 @@ bot.on('message', async (msg) => {
   }
 
   // ==================== АДМИН-КОМАНДЫ ====================
-  if (id === ADMIN_ID) {
-    if (text.startsWith('уведомление ')) {
+if (id === ADMIN_ID) {
+  console.log('✅ АДМИН РАСПОЗНАН! ID:', id, 'Текст:', text); // <-- ДОБАВИТЬ ЭТУ СТРОКУ
+  if (text.startsWith('уведомление ')) {
       const message = text.replace('уведомление ', '');
       let sent = 0;
       for (let pid in players) {
@@ -7996,22 +8108,6 @@ setInterval(() => {
   bot.sendMessage(targetId, formatMessage('🏴‍☠️ СОБЫТИЕ В ЧАТЕ', event));
 }, 10 * 60 * 1000);
 
-// ==================== 3.3: ПИРАТСКИЕ АНЕКДОТЫ ====================
-setInterval(() => {
-  const now = Date.now();
-  const joke = JOKES[Math.floor(Math.random() * JOKES.length)];
-  
-  const activePlayers = Object.keys(players).filter(pid => {
-    const p = players[pid];
-    return p && p.lastActivity && (now - p.lastActivity) < 6 * 60 * 60 * 1000;
-  });
-  
-  for (let pid of activePlayers) {
-    bot.sendMessage(pid, formatMessage('😂 ПИРАТСКИЙ АНЕКДОТ', joke)).catch(() => {});
-    sleep(100);
-  }
-}, 60 * 60 * 1000);
-
 // ==================== ЛОТЕРЕЯ (ПРОВЕРКА КАЖДЫЕ 10 СЕКУНД) ====================
 setInterval(processLotteryDraw, 10000);
 
@@ -8294,6 +8390,15 @@ bot.onText(/\/start/, async (msg) => {
       p.tier = 'premium';
       updateMaxEnergy(p);
       saveData();
+    }
+
+        // ========== АДМИН ПОЛУЧАЕТ LEGENDARY АВТОМАТИЧЕСКИ ==========
+    if (id === ADMIN_ID) {
+      p.tier = 'legendary';
+      p.tierExpiry = Date.now() + 365 * 24 * 3600000 * 1000; // 1000 лет
+      updateMaxEnergy(p);
+      saveData();
+      bot.sendMessage(id, formatMessage('👑 АДМИН-ДОСТУП', 'Ты получил Legendary доступ навсегда!'));
     }
     
     if (p.tier === 'legendary' && p.tierExpiry && p.tierExpiry < Date.now()) {
