@@ -1,3 +1,4 @@
+удалить эту строку, как только выполню цсловия для получения оплат!
 require('dotenv').config();
 const TelegramBot = require('node-telegram-bot-api');
 const fs = require('fs');
