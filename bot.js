@@ -1147,6 +1147,30 @@ const EVENT_POOL = [
   { name: '🛡️ Абсолютная защита', desc: 'Защита от атак на 48 часов', duration: 172800000 },
   { name: '🎯 Точка невозврата', desc: 'При выпадении 12 выигрыш ×15', duration: 600000 },
   { name: '🏴‍☠️ Пиратская империя', desc: 'Все игроки получают +200 дуб.', duration: 600000 },
+  // ==================== НОВЫЕ СОБЫТИЯ ДЛЯ МОРСКОГО БОЯ ====================
+{ name: '⚔️ Удвоение ставок в морском бое', desc: 'Все ставки в морском бое удваиваются автоматически!', duration: 1800000 },
+{ name: '⚔️ Бесплатный вход в морской бой', desc: 'Вход в морской бой бесплатный! Без комиссии!', duration: 1800000 },
+{ name: '⚔️ Морской бой ×3', desc: 'Все выигрыши в морском бое увеличены в 3 раза!', duration: 1200000 },
+{ name: '⚔️ Бонусный флот в морском бое', desc: 'Каждая победа в морском бое даёт +50 дуб. бонуса!', duration: 1800000 },
+// ==================== НОВЫЕ СОБЫТИЯ ДЛЯ КРАКЕНА ====================
+{ name: '🐙 Удвоение урона Кракену', desc: 'Урон по Кракену увеличен в 2 раза!', duration: 1800000 },
+{ name: '🐙 Бонусные рейды на Кракена', desc: 'Каждый рейд на Кракена даёт +100 дуб. бонуса всем участникам!', duration: 1800000 },
+{ name: '🐙 Кракен ослаблен', desc: 'HP Кракена снижено на 30%! Легче побеждать!', duration: 1800000 },
+{ name: '🐙 Кракен-марафон', desc: 'Рейды на Кракена доступны без ограничений по энергии!', duration: 1200000 },
+{ name: '🐙 Золотой Кракен', desc: 'Награда за победу над Кракеном увеличена в 2 раза!', duration: 1800000 },
+// ==================== НОВЫЕ СОБЫТИЯ ДЛЯ КАРТ И СУВЕНИРОВ ====================
+{ name: '🃏 Удвоение шанса выпадения карт', desc: 'Шанс выпадения карт увеличен в 2 раза!', duration: 3600000 },
+{ name: '🃏 Легендарная ночь', desc: 'Шанс выпадения легендарной карты увеличен в 3 раза!', duration: 1800000 },
+{ name: '🃏 Крафт-бум', desc: 'Крафт карт требует всего 2 дубликата вместо 3!', duration: 1800000 },
+{ name: '🎁 Удвоение шанса выпадения сувениров', desc: 'Шанс найти сувенир увеличен в 2 раза!', duration: 3600000 },
+{ name: '🎁 Сувенирный дождь', desc: 'Сувениры дают двойной бонус!', duration: 1800000 },
+{ name: '🎁 Редкие сувениры', desc: 'Шанс выпадения редких сувениров увеличен в 3 раза!', duration: 1800000 },
+// ==================== КОМБИНИРОВАННЫЕ СОБЫТИЯ ====================
+{ name: '⚔️🐙 Морская лихорадка', desc: 'Морской бой и Кракен дают двойные награды!', duration: 1800000 },
+{ name: '⚔️🃏 Карточный бой', desc: 'За победу в морском бое выпадает дополнительная карта!', duration: 1800000 },
+{ name: '🐙🎁 Кракен с сувенирами', desc: 'За участие в рейде на Кракена даётся сувенир!', duration: 1800000 },
+{ name: '⚔️💰 Морской джекпот', desc: 'В морском бое можно выиграть джекпот банка!', duration: 1800000 },
+{ name: '🐙💰 Кракен-джекпот', desc: 'За победу над Кракеном даётся бонус от джекпота!', duration: 1800000 },
 ];
 
 // ==================== БЛЭКДЖЕК (ФУНКЦИИ) ====================
@@ -2294,6 +2318,7 @@ function collectPassiveIncome(id) {
     p.lastPassiveTime = now;
     saveData();
   }
+}
 
 function getPlayer(id) {
   if (!players[id]) {
@@ -7412,18 +7437,189 @@ bot.on('message', async (msg) => {
       return;
     }
     if (text.startsWith('отклонить ')) {
-      const index = parseInt(text.split(' ')[1]) - 1;
-      if (isNaN(index) || index < 0 || index >= withdrawQueue.length) {
-        return bot.sendMessage(id, formatMessage('ВЫВОДЫ', '❌ Неверный номер.'));
-      }
-      const item = withdrawQueue[index];
-      withdrawQueue.splice(index, 1);
-      saveData();
-      bot.sendMessage(id, formatMessage('ВЫВОДЫ', `❌ Вывод ${item.amount} дуб. для @${item.username || item.id} отклонён.`));
-      bot.sendMessage(item.id, formatMessage('ВЫВОДЫ', `❌ Твой вывод ${item.amount} дуб. отклонён.`));
-      delete adminState?.[id];
-      return;
+  const index = parseInt(text.split(' ')[1]) - 1;
+  if (isNaN(index) || index < 0 || index >= withdrawQueue.length) {
+    return bot.sendMessage(id, formatMessage('ВЫВОДЫ', '❌ Неверный номер.'));
+  }
+  const item = withdrawQueue[index];
+  withdrawQueue.splice(index, 1);
+  saveData();
+  bot.sendMessage(id, formatMessage('ВЫВОДЫ', `❌ Вывод ${item.amount} дуб. для @${item.username || item.id} отклонён.`));
+  bot.sendMessage(item.id, formatMessage('ВЫВОДЫ', `❌ Твой вывод ${item.amount} дуб. отклонён.`));
+  delete adminState?.[id];
+  return;
+}
+// ==================== АДМИН-ПАНЕЛЬ: УПРАВЛЕНИЕ ИНВЕСТИЦИЯМИ ====================
+if (text.startsWith('инвестиции ')) {
+  const parts = text.split(' ');
+  const targetId = parseInt(parts[1]);
+  if (isNaN(targetId)) {
+    return bot.sendMessage(id, formatMessage('ИНВЕСТИЦИИ', '❌ Формат: инвестиции ID\nПример: инвестиции 123456789'));
+  }
+  const target = players[targetId];
+  if (!target) {
+    return bot.sendMessage(id, formatMessage('ИНВЕСТИЦИИ', `❌ Игрок ${targetId} не найден.`));
+  }
+  
+  const invested = target.investment || 0;
+  const rate = (target.investmentRate || 0.01) * 100;
+  const now = Date.now();
+  const hours = Math.max(0, (now - (target.investmentTime || now)) / 3600000);
+  const earned = Math.floor(invested * (target.investmentRate || 0.01) * hours);
+  const history = target.investmentHistory || [];
+  const lastOps = history.slice(-5).reverse().map(h => {
+    const type = h.type === 'invest' ? '💰 Вклад' : '📤 Вывод';
+    return `${type}: ${h.amount} дуб. (${new Date(h.time).toLocaleString()})`;
+  }).join('\n');
+  
+  let msg = `📊 ИНВЕСТИЦИИ ИГРОКА @${target.username || targetId}\n\n`;
+  msg += `💰 Вложено: ${invested} дуб.\n`;
+  msg += `📈 Доходность: ${rate.toFixed(1)}% в день\n`;
+  msg += `⏳ Времени прошло: ${hours.toFixed(1)} ч.\n`;
+  msg += `📈 Заработано (пассивно): ${earned} дуб.\n`;
+  msg += `📊 Баланс игрока: ${target.demoMode ? safeNumber(target.demoBalance) : safeNumber(target.balance)} дуб.\n\n`;
+  msg += `📜 Последние операции:\n${lastOps || 'Нет операций'}`;
+  
+  bot.sendMessage(id, formatMessage('ИНВЕСТИЦИИ', msg));
+  delete adminState?.[id];
+  return;
+}
+
+if (text.startsWith('начислить инвестиции ')) {
+  const parts = text.split(' ');
+  if (parts.length < 4) {
+    return bot.sendMessage(id, formatMessage('ИНВЕСТИЦИИ', '❌ Формат: начислить инвестиции ID СУММА\nПример: начислить инвестиции 123456789 5000'));
+  }
+  const targetId = parseInt(parts[2]);
+  const amount = parseInt(parts[3]);
+  if (isNaN(targetId) || isNaN(amount) || amount <= 0) {
+    return bot.sendMessage(id, formatMessage('ИНВЕСТИЦИИ', '❌ Неверный ID или сумма.'));
+  }
+  const target = players[targetId];
+  if (!target) {
+    return bot.sendMessage(id, formatMessage('ИНВЕСТИЦИИ', `❌ Игрок ${targetId} не найден.`));
+  }
+  
+  if (target.demoMode) {
+    target.demoBalance = safeNumber(target.demoBalance) + amount;
+  } else {
+    target.balance = safeNumber(target.balance) + amount;
+  }
+  target.totalEarned = safeNumber(target.totalEarned) + amount;
+  
+  if (!target.investmentHistory) target.investmentHistory = [];
+  target.investmentHistory.push({
+    time: Date.now(),
+    type: 'admin_add',
+    amount: amount,
+    balance: target.investment || 0
+  });
+  
+  addHistory(targetId, `Админ начислил на инвестиции: +${amount} дуб.`);
+  addBalanceHistory(targetId, amount, `Админ начислил на инвестиции`);
+  saveData();
+  
+  bot.sendMessage(id, formatMessage('ИНВЕСТИЦИИ', `✅ Начислено ${amount} дуб. на инвестиции игрока @${target.username || targetId}.`));
+  bot.sendMessage(targetId, formatMessage('ИНВЕСТИЦИИ', `💰 Админ начислил тебе ${amount} дуб. на инвестиции!`));
+  delete adminState?.[id];
+  return;
+}
+    // ==================== АДМИН-ПАНЕЛЬ: УПРАВЛЕНИЕ КАРТАМИ И СУВЕНИРАМИ ====================
+if (text.startsWith('выдать карту ')) {
+  const parts = text.split(' ');
+  if (parts.length < 3) {
+    return bot.sendMessage(id, formatMessage('КАРТЫ', '❌ Формат: выдать карту ID [количество]\nПример: выдать карту 123456789 5'));
+  }
+  const targetId = parseInt(parts[2]);
+  const count = parts.length > 3 ? parseInt(parts[3]) : 1;
+  if (isNaN(targetId) || isNaN(count) || count < 1 || count > 100) {
+    return bot.sendMessage(id, formatMessage('КАРТЫ', '❌ Неверный ID или количество (1-100).'));
+  }
+  const target = players[targetId];
+  if (!target) {
+    return bot.sendMessage(id, formatMessage('КАРТЫ', `❌ Игрок ${targetId} не найден.`));
+  }
+  
+  let given = 0;
+  let cardsList = [];
+  for (let i = 0; i < count; i++) {
+    const card = giveCardToUser(targetId);
+    if (card) {
+      given++;
+      cardsList.push(`${card.emoji} ${card.name}`);
     }
+  }
+  
+  saveData();
+  const stats = getUserCardStats(targetId);
+  bot.sendMessage(id, formatMessage('КАРТЫ', `✅ Выдано ${given} карт игроку @${target.username || targetId}\n\n${cardsList.slice(0, 10).join('\n')}${cardsList.length > 10 ? `\n...и ещё ${cardsList.length - 10} карт` : ''}\n\n📊 Всего карт у игрока: ${stats.total || 0}`));
+  bot.sendMessage(targetId, formatMessage('🃏 НОВЫЕ КАРТЫ ОТ АДМИНА!', `Админ выдал тебе ${given} карт!\n\n${cardsList.slice(0, 5).join('\n')}${cardsList.length > 5 ? `\n...и ещё ${cardsList.length - 5} карт` : ''}`));
+  delete adminState?.[id];
+  return;
+}
+
+if (text.startsWith('очистить карты ')) {
+  const parts = text.split(' ');
+  if (parts.length < 3) {
+    return bot.sendMessage(id, formatMessage('КАРТЫ', '❌ Формат: очистить карты ID'));
+  }
+  const targetId = parseInt(parts[2]);
+  if (isNaN(targetId)) {
+    return bot.sendMessage(id, formatMessage('КАРТЫ', '❌ Неверный ID.'));
+  }
+  const target = players[targetId];
+  if (!target) {
+    return bot.sendMessage(id, formatMessage('КАРТЫ', `❌ Игрок ${targetId} не найден.`));
+  }
+  
+  const count = cardsData.collection[targetId]?.length || 0;
+  if (count === 0) {
+    return bot.sendMessage(id, formatMessage('КАРТЫ', '❌ У игрока нет карт для очистки.'));
+  }
+  
+  cardsData.collection[targetId] = [];
+  cardsData.cardStats[targetId] = { total: 0, common: 0, uncommon: 0, rare: 0, legendary: 0 };
+  target.collectionBonus25 = false;
+  target.collectionBonus40 = false;
+  target.collectionBonus50 = false;
+  saveCards();
+  saveData();
+  
+  bot.sendMessage(id, formatMessage('КАРТЫ', `✅ Очищено ${count} карт у игрока @${target.username || targetId}.`));
+  bot.sendMessage(targetId, formatMessage('🗑️ КАРТЫ ОЧИЩЕНЫ!', `Админ очистил твою коллекцию карт (${count} карт).`));
+  delete adminState?.[id];
+  return;
+}
+
+if (text.startsWith('выдать сувенир ')) {
+  const parts = text.split(' ');
+  if (parts.length < 3) {
+    return bot.sendMessage(id, formatMessage('СУВЕНИРЫ', '❌ Формат: выдать сувенир ID\nПример: выдать сувенир 123456789'));
+  }
+  const targetId = parseInt(parts[2]);
+  if (isNaN(targetId)) {
+    return bot.sendMessage(id, formatMessage('СУВЕНИРЫ', '❌ Неверный ID.'));
+  }
+  const target = players[targetId];
+  if (!target) {
+    return bot.sendMessage(id, formatMessage('СУВЕНИРЫ', `❌ Игрок ${targetId} не найден.`));
+  }
+  
+  const souvenir = giveSouvenirToUser(targetId);
+  if (!souvenir) {
+    return bot.sendMessage(id, formatMessage('СУВЕНИРЫ', '❌ Не удалось выдать сувенир.'));
+  }
+  
+  saveSouvenirs();
+  saveData();
+  const count = souvenirsData.collection[targetId]?.length || 0;
+  
+  bot.sendMessage(id, formatMessage('СУВЕНИРЫ', `✅ Выдан сувенир "${souvenir.name}" игроку @${target.username || targetId}\n📊 Всего сувениров у игрока: ${count}/10`));
+  bot.sendMessage(targetId, formatMessage('🎁 НОВЫЙ СУВЕНИР ОТ АДМИНА!', `${souvenir.name}\n${souvenir.desc}\n⏳ Длится 1 час!`));
+  delete adminState?.[id];
+  return;
+}
+    
     // Обработка команды для выстрела в морском бою
     if (adminState[id] && adminState[id].action === 'battle_shoot') {
       const battleId = adminState[id].battleId;
