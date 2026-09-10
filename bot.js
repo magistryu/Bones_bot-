@@ -15,6 +15,7 @@ process.on('unhandledRejection', (reason, promise) => {
 
 const token = process.env.BOT_TOKEN;
 const ADMIN_ID = parseInt(process.env.ADMIN_ID);
+const MOM_ID = parseInt(process.env.MOM_ID);
 
 // ==================== АДМИН-НАСТРОЙКИ ====================
 const ADMIN_CONFIG = {
