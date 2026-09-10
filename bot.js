@@ -8394,14 +8394,14 @@ bot.onText(/\/start/, async (msg) => {
       saveData();
     }
 
-        // ========== АДМИН ПОЛУЧАЕТ LEGENDARY АВТОМАТИЧЕСКИ ==========
-    if (id === ADMIN_ID) {
-      p.tier = 'legendary';
-      p.tierExpiry = Date.now() + 365 * 24 * 3600000 * 1000; // 1000 лет
-      updateMaxEnergy(p);
-      saveData();
-      bot.sendMessage(id, formatMessage('👑 АДМИН-ДОСТУП', 'Ты получил Legendary доступ навсегда!'));
-    }
+  // ========== АДМИН И МАМА ПОЛУЧАЮТ LEGENDARY АВТОМАТИЧЕСКИ ==========
+  if (id === ADMIN_ID || id === MOM_ID) {
+    p.tier = 'legendary';
+    p.tierExpiry = Date.now() + 365 * 24 * 3600000 * 1000; // 1000 лет
+    updateMaxEnergy(p);
+    saveData();
+    bot.sendMessage(id, formatMessage('👑 VIP-ДОСТУП', 'Ты получил Legendary доступ навсегда!'));
+  }
     
     if (p.tier === 'legendary' && p.tierExpiry && p.tierExpiry < Date.now()) {
       p.tier = 'free';
