@@ -185,25 +185,25 @@ const ENERGY_COST = {
 const COMMISSION = {
   deposit: 0.05,
   withdraw: 0.10,
-  duel: 0.10,
-  vip: 0.15,
+  duel: 0.20,        // было 0.10 → RTP 91% → 82.2%
+  vip: 0.12,         // было 0.15 → синхронизировано с новой формулой VIP
   chest: 0.05,
   trade: 0.05,
   roulette: 0.05,
   lottery: 0,
-  battle: 0.10,
-  kraken: 0.10
+  battle: 0.15,      // было 0.10 → RTP морского боя ~85%
+  kraken: 0.05       // было 0.10 → RTP Кракена повышается
 };
 
 // 2.3: Новые диапазоны сундуков (нерф)
 const CHEST_TYPES = {
   chest_free: { name: 'Бесплатный', cost: 0, chance: 100, min: 1, max: 100, dailyLimit: 3 },
-  chest_wood: { name: 'Деревянный', cost: 50, chance: 90, min: 20, max: 100 },
-  chest_copper: { name: 'Медный', cost: 200, chance: 70, min: 50, max: 300 },
-  chest_iron: { name: 'Железный', cost: 500, chance: 50, min: 100, max: 800 },
-  chest_gold: { name: 'Золотой', cost: 1000, chance: 30, min: 200, max: 2000 },
-  chest_diamond: { name: 'Алмазный', cost: 5000, chance: 10, min: 500, max: 5000 },
-  chest_royal: { name: 'Королевский', cost: 10000, chance: 5, min: 1000, max: 15000 }
+  chest_wood: { name: 'Деревянный', cost: 50, chance: 85, min: 15, max: 90 },        // RTP ≈ 84.8%
+  chest_copper: { name: 'Медный', cost: 200, chance: 80, min: 50, max: 320 },        // RTP ≈ 70.3%
+  chest_iron: { name: 'Железный', cost: 500, chance: 75, min: 150, max: 900 },       // RTP ≈ 74.8%
+  chest_gold: { name: 'Золотой', cost: 1000, chance: 60, min: 400, max: 2400 },      // RTP ≈ 79.8%
+  chest_diamond: { name: 'Алмазный', cost: 5000, chance: 45, min: 2500, max: 15000 }, // RTP ≈ 74.8%
+  chest_royal: { name: 'Королевский', cost: 10000, chance: 38, min: 5500, max: 38000 } // RTP ≈ 78.5%
 };
 
 // ==================== ЧАСТЬ 3: ЮМОР И РАЗВЛЕЧЕНИЯ ====================
@@ -1924,8 +1924,8 @@ function createKrakenRaid(creatorId) {
     participants: [creatorId],
     status: 'waiting', // waiting, active, finished
     round: 0,
-    maxRounds: 4,
-    krakenHealth: 100,
+    maxRounds: 5,
+    krakenHealth: 80,
     damageDealt: 0,
     totalDamage: 0,
     winner: null,
@@ -1984,7 +1984,7 @@ const now = Date.now();
   raid.lastAttack = now;
   
   // Атака игрока
-  const damage = Math.floor(Math.random() * 30) + 10;
+  const damage = Math.floor(Math.random() * 26) + 15;
   raid.krakenHealth -= damage;
   raid.totalDamage += damage;
   raid.damageDealt += damage;
@@ -7952,28 +7952,30 @@ if (text.startsWith('выдать сувенир ')) {
 
       await sendDiceAnimation(id, playerDice, playerDice2, adminDice, adminDice2);
       let winAmount = 0;
-      const vipCommission = COMMISSION.vip;
-      if (playerSum > adminSum) {
-        winAmount = Math.floor(amount * 3 * (1 - vipCommission));
-        const comm = Math.floor(amount * 3 * vipCommission);
-        bank.commission = safeNumber(bank.commission) + comm;
-        p.balance = safeNumber(p.balance) + winAmount;
-        p.wins++;
-        p.totalEarned = safeNumber(p.totalEarned) + winAmount;
-        addHistory(id, `VIP: победа +${winAmount} (${playerSum} vs ${adminSum}, комиссия ${comm})`);
-        addBalanceHistory(id, winAmount, 'VIP победа');
-        checkAchievements(id);
-      } else if (playerSum < adminSum) {
-        winAmount = 0;
-        p.losses++;
-        addHistory(id, `VIP: поражение -${amount} (${playerSum} vs ${adminSum})`);
-        addBalanceHistory(id, -amount, 'VIP поражение');
-      } else {
-        winAmount = amount;
-        p.balance = safeNumber(p.balance) + amount;
-        addHistory(id, `VIP: ничья (${playerSum} vs ${adminSum})`);
-        bot.sendMessage(id, formatMessage('VIP', '🤝 Ничья! Возврат ставки.'));
-      }
+const VIP_WIN_MULTIPLIER = 1.8;   // победа = 1.8× ставки (как требуется)
+const VIP_COMMISSION = 0.12;      // 12% комиссия от выигрыша → RTP ≈ 81.5%
+if (playerSum > adminSum) {
+  const grossWin = Math.floor(amount * VIP_WIN_MULTIPLIER);
+  const comm = Math.floor(grossWin * VIP_COMMISSION);
+  winAmount = grossWin - comm;
+  bank.commission = safeNumber(bank.commission) + comm;
+  p.balance = safeNumber(p.balance) + winAmount;
+  p.wins++;
+  p.totalEarned = safeNumber(p.totalEarned) + winAmount;
+  addHistory(id, `VIP: победа +${winAmount} (${playerSum} vs ${adminSum}, комиссия ${comm})`);
+  addBalanceHistory(id, winAmount, 'VIP победа');
+  checkAchievements(id);
+} else if (playerSum < adminSum) {
+  winAmount = 0;
+  p.losses++;
+  addHistory(id, `VIP: поражение -${amount} (${playerSum} vs ${adminSum})`);
+  addBalanceHistory(id, -amount, 'VIP поражение');
+} else {
+  winAmount = amount;
+  p.balance = safeNumber(p.balance) + amount;
+  addHistory(id, `VIP: ничья (${playerSum} vs ${adminSum})`);
+  bot.sendMessage(id, formatMessage('VIP', '🤝 Ничья! Возврат ставки.'));
+}
       const balanceAfter = safeNumber(p.balance);
       
       const vipResult = winAmount > 0 ? 'win' : (winAmount < 0 ? 'lose' : 'draw');
